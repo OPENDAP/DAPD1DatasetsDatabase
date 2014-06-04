@@ -30,7 +30,7 @@ import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Options;
 //import org.apache.commons.cli.PosixParser;
 
-import org.apache.log4j.Logger;
+//import org.apache.log4j.Logger;
 
 // import org.slf4j.Logger;
 // import org.slf4j.LoggerFactory;
