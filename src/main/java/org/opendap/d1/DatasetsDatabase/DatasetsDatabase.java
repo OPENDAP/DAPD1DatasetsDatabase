@@ -24,6 +24,7 @@ package org.opendap.d1.DatasetsDatabase;
 import org.opendap.d1.DatasetsDatabase.DAPDatabaseException;
 
 import java.sql.*;
+import java.text.ParseException;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.HashSet;
@@ -31,6 +32,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.Vector;
 
+import org.apache.commons.lang.time.DateUtils;
 import org.apache.log4j.Logger;
 
 /**
@@ -506,5 +508,40 @@ public class DatasetsDatabase {
 		}
 	}
 
+	public Date getDateSysmetaModified(String pid) throws SQLException, DAPDatabaseException {
+		Statement stmt = c.createStatement();
+		ResultSet rs = null;
+		try {
+			String dateString = null;
+			int count = 0;
+			String sql = "SELECT DateSysMetadataModified.date FROM DateSysMetadataModified "
+					+ "WHERE DateSysMetadataModified.Id = '" + pid + "';";
+			rs = stmt.executeQuery(sql);
+			while (rs.next()) {
+				count++;
+				dateString = rs.getString("date");
+			}
+			
+			switch (count) {
+			case 0:
+				throw new DAPDatabaseException("Corrupt database. Did not find the date for '" + pid + "'.");
+
+			case 1:
+				Date date = DateUtils.parseDate(dateString, new String[]{"yyyy-MM-dd'T'HH:mm'Z'"});
+				return date;
+
+			default:
+				throw new DAPDatabaseException("Corrupt database. Found more that date for '" + pid + "'.");	
+			}
+		} catch (SQLException e) {
+			log.error("Corrupt database (" + dbName + "): " + e.getMessage());
+			throw e;
+		} catch (ParseException e) {
+			throw new DAPDatabaseException("Corrupt database. Malformed date/time for '" + pid + "': " + e.getMessage());	
+		} finally {
+			rs.close();
+			stmt.close();
+		}
+	}
 
 }

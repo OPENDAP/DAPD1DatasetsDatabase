@@ -4,6 +4,7 @@
 package org.opendap.d1.DatasetsDataBase;
 
 import java.sql.SQLException;
+import java.util.Date;
 import java.util.List;
 
 import org.opendap.d1.DatasetsDatabase.DAPDatabaseException;
@@ -174,5 +175,20 @@ public class DatasetsDatabaseTest extends TestCase {
 			e.printStackTrace();
 			fail("Caught DAPDatabaseException");
 		}
+	}
+	
+	public void testGetDateSysmetaModified() {
+		try {
+			Date d = db.getDateSysmetaModified(fnoc1_smo);
+			assertNotNull("This should be a valid date/time - we only test that the result is not null", d);
+			// assertEquals("The (re)parsed date/time value (this won't work once the DB is rewritten)", String.format("%tFT%<tRZ", d), "2014-06-03T10:15Z");
+		} catch (SQLException e) {
+			e.printStackTrace();
+			fail("Caught SQLException.");
+		} catch (DAPDatabaseException e) {
+			e.printStackTrace();
+			fail("Caught DAPDatabaseException");
+		}
+		
 	}
 }
