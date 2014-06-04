@@ -1,0 +1,123 @@
+/**
+ *  Copyright: 2014 OpenDAP, Inc.
+ *
+ * Author: James Gallagher <jgallagher@opendap.org>
+ * 
+ * This is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ *
+ * This software is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+ *
+ * You can contact OpenDAP, Inc. at PO Box 112, Saunderstown, RI. 02874-0112.
+ */
+package org.opendap.d1.DatasetsDatabase;
+
+import java.io.PrintStream;
+
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.CommandLineParser;
+import org.apache.commons.cli.GnuParser;
+import org.apache.commons.cli.HelpFormatter;
+import org.apache.commons.cli.Options;
+//import org.apache.commons.cli.PosixParser;
+
+import org.apache.log4j.Logger;
+
+// import org.slf4j.Logger;
+// import org.slf4j.LoggerFactory;
+
+/**
+ * @brief Create, Read, Update, Delete tool for the DAP/D1 servlet's database
+ * 
+ * This command line tool performs the basic CRUD operations on the database used
+ * by the DAP/D1 servlet. See README.dataset.db for info about the database design.
+ * In the current incarnation, the database uses SQLite.
+ * 
+ * @author James Gallagher
+ *
+ */
+public class EditDatasets {
+	
+    // private static Logger log = Logger.getLogger(EditDatasets.class);
+    
+	/**
+	 * @param args
+	 */
+	public static void main(String[] args) {
+
+	    final CommandLineParser parser = new GnuParser();
+
+		Options options = new Options();
+
+		options.addOption("v", "verbose", false, "Write info to stdout");
+		options.addOption("i", "initialize", false, "Create tables for a blank database");
+		options.addOption("h", "help", false, "Usage information");
+		
+		try {
+		    CommandLine line = parser.parse( options, args );
+
+			if (line.hasOption("h")) {
+				HelpFormatter formatter = new HelpFormatter();
+				formatter.printHelp("EditDatasets [options] <database name> [<DAP URL>]", options);
+				return;
+			}
+
+		    boolean verbose = line.hasOption("v");
+		    PrintStream ps = System.out;
+		    
+		    String remainingArgs[] = line.getArgs();
+		    if (remainingArgs.length < 1)
+		    	throw new Exception("Expected the database name.");
+		    
+		    String dbName = remainingArgs[0];
+		    if (verbose) {
+		    	ps.println("Databae Name: " + dbName);
+		    }
+		    
+		    DatasetsDatabase db = new DatasetsDatabase(dbName);
+		    // Test if 'dbName' exists 
+		    if (line.hasOption("i")) {
+		    	if (verbose)
+		    		ps.println("Initializing database...");
+		    	db.initTables();
+		    }
+		    
+		    if (!db.isValid()) {
+		    	ps.println("Database opened but is not valid.");
+		    	return;
+		    }
+		    	
+		    
+		    for (int i = 1; i < remainingArgs.length; ++i) {
+		    	if (verbose)
+		    		ps.println("Adding URL to database... " + remainingArgs[i]);
+		    	db.addDataset(remainingArgs[i]);
+		    }
+		    
+		    if (verbose) {
+		    	ps.println("Rows in the database: " + db.count());
+		    	db.dump();
+		    }
+		}
+		catch(Exception e) {
+			System.err.println("Error: " + e.getLocalizedMessage());
+			e.printStackTrace();
+			return;
+		}
+	}
+	/*
+	private static boolean doesNotExist(String name) {
+		File f = new File(name);
+		return !f.exists();
+	}
+	*/
+}
