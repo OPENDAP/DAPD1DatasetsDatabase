@@ -23,17 +23,37 @@ package org.opendap.d1.DatasetsDatabase;
 
 import org.opendap.d1.DatasetsDatabase.DAPDatabaseException;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+//import java.io.InputStream;
+import java.net.URISyntaxException;
+//import java.security.NoSuchAlgorithmException;
 import java.sql.*;
 import java.text.ParseException;
 import java.util.Arrays;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.Vector;
 
+import org.apache.commons.io.input.CountingInputStream;
 import org.apache.commons.lang.time.DateUtils;
+import org.apache.http.HttpResponse;
+import org.apache.http.client.ClientProtocolException;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.log4j.Logger;
+import org.dataone.ore.ResourceMapFactory;
+import org.dataone.service.types.v1.Checksum;
+import org.dataone.service.types.v1.Identifier;
+import org.dataone.service.types.v1.util.ChecksumUtil;
+import org.dspace.foresite.OREException;
+import org.dspace.foresite.ORESerialiserException;
+import org.dspace.foresite.ResourceMap;
 
 /**
  * @brief A database of stuff for the DAP/D1 servlet.
@@ -208,32 +228,40 @@ public class DatasetsDatabase {
 		Statement stmt = c.createStatement();
 	
 		try {
+			// Use this ISO601 time string for all three entries
+			String now8601 = ISO8601(new Date());
+			
 			// First add the SDO info
 			String SDO = buildId(URL, SDO_IDENT, 1);	// reuse
-			String sql = "INSERT INTO SDO (Id, DAP_URL) VALUES ('" + SDO + "','" + buildDAPURL(URL, SDO_EXT) + "');";
+			String SDOURL = buildDAPURL(URL, SDO_EXT);
+			String sql = "INSERT INTO SDO (Id, DAP_URL) VALUES ('" + SDO + "','" + SDOURL + "');";
 			stmt.executeUpdate(sql);
 			
-			String now8601 = ISO8601(new Date());	// reuse
-			Integer size = new Integer(315);
-			String checksum = "25";
-			String algorithm = "SHA-1";
+			CountingInputStream cis = getDAPURLContents(SDOURL);
+			Checksum checksum = ChecksumUtil.checksum(cis, "SHA-1");
+			Long size = new Long(cis.getByteCount());
+			cis.close();
 			
 			sql = "INSERT INTO Metadata (Id,dateAdded,format,size,checksum,algorithm) "
 					+ "VALUES ('" + SDO + "','" + now8601 + "','" + SDO_FORMAT + "','" + size.toString() + "','" 
-					+ checksum + "','" + algorithm + "');";
+					+ checksum.getValue() + "','" + checksum.getAlgorithm() + "');";
 			log.debug("SQL Statement: " + sql);
 			stmt.executeUpdate(sql);
 
 			// Then add the SMO info
 			String SMO = buildId(URL, SMO_IDENT, 1);	// reuse
-			sql = "INSERT INTO SMO (Id, DAP_URL) VALUES ('" + SMO + "', '" + buildDAPURL(URL, SMO_EXT) + "');";
+			String SMOURL = buildDAPURL(URL, SMO_EXT);
+			sql = "INSERT INTO SMO (Id, DAP_URL) VALUES ('" + SMO + "', '" + SMOURL + "');";
 			stmt.executeUpdate(sql);
 
-			size = 17;
-			checksum = "1F";
+			cis = getDAPURLContents(SMOURL);
+			checksum = ChecksumUtil.checksum(cis, "SHA-1");
+			size = new Long(cis.getByteCount());
+			cis.close();
+			
 			sql = "INSERT INTO Metadata (Id,dateAdded,format,size,checksum,algorithm) "
 					+ "VALUES ('" + SMO + "','" + now8601 + "','" + SMO_FORMAT + "','" + size.toString() + "','" 
-					+ checksum + "','" + algorithm + "');";
+					+ checksum.getValue() + "','" + checksum.getAlgorithm() + "');";
 			stmt.executeUpdate(sql);
 
 			// Then add the ORE info
@@ -241,11 +269,14 @@ public class DatasetsDatabase {
 			sql = "INSERT INTO ORE (Id, SDO_Id, SMO_Id) VALUES ('" + ORE + "', '" + SDO + "', '" + SMO + "');";
 			stmt.executeUpdate(sql);
 
-			size = 6;
-			checksum = "0F";
+			cis = getOREDocContents(ORE, SMO, SDO);
+			checksum = ChecksumUtil.checksum(cis, "SHA-1");
+			size = new Long(cis.getByteCount());
+			cis.close();
+			
 			sql = "INSERT INTO Metadata (Id,dateAdded,format,size,checksum,algorithm) "
 					+ "VALUES ('" + ORE + "','" + now8601 + "','" + ORE_FORMAT + "','" + size.toString() + "','" 
-					+ checksum + "','" + algorithm + "');";
+					+ checksum.getValue() + "','" + checksum.getAlgorithm() + "');";
 			stmt.executeUpdate(sql);
 
 		} catch (SQLException e) {
@@ -258,13 +289,67 @@ public class DatasetsDatabase {
 	}
 	
 	/**
+	 * Get a CountingInputStream that contains the DAP URL's contents. This kind of InputStream
+	 * can be used with D1's ChecksumUtil class to compute the checksum and then us to find 
+	 * the number of bytes. This way the checksum and size can be computed without reading the 
+	 * object twice.
+	 * 
+	 * @param URL
+	 * @return An instance of CountingInputStream
+	 * @throws ClientProtocolException
+	 * @throws IOException
+	 */
+	private CountingInputStream getDAPURLContents(String URL) throws ClientProtocolException, IOException {
+		HttpClient client = new DefaultHttpClient();
+		HttpGet request = new HttpGet(URL);
+		HttpResponse response = client.execute(request);
+
+		// Get the response
+		return new CountingInputStream(response.getEntity().getContent());
+	}
+		
+	/**
+	 * Instead of reading the ORE doc - because they are built on-the-fly - make
+	 * it and return a CountingInputStream that can be used to both compute the
+	 * checksum and count the bytes.
+	 * 
+	 * @param ORE A String that holds the D1 PID for the ORE document 
+	 * @param SMO A String that holds the D1 PID for the SMO document
+	 * @param SDO A String that holds the D1 PID for the SDO document
+	 * @return An instance of CountingInputStream
+	 * @throws OREException
+	 * @throws URISyntaxException
+	 * @throws ORESerialiserException
+	 */
+	private CountingInputStream getOREDocContents(String ORE, String SMO, String SDO) 
+			throws OREException, URISyntaxException, ORESerialiserException {
+		Identifier smoId = new Identifier();
+		smoId.setValue(SMO);
+
+		List<Identifier> dataObjects = new Vector<Identifier>();
+		Identifier sdoId = new Identifier();
+		sdoId.setValue(SDO);
+		dataObjects.add(sdoId);
+		
+		Map<Identifier, List<Identifier>> idMap = new HashMap<Identifier, List<Identifier>>();
+		idMap.put(smoId, dataObjects);
+		
+		Identifier oreId = new Identifier();
+		oreId.setValue(ORE);
+		
+		ResourceMap rm = ResourceMapFactory.getInstance().createResourceMap(oreId, idMap);
+		String resourceMapXML = ResourceMapFactory.getInstance().serializeResourceMap(rm);
+		return new CountingInputStream(new ByteArrayInputStream(resourceMapXML.getBytes()));
+	}
+		
+	/**
 	 * This takes a DAP URL and makes a DAP/D1 Servlet PID from it. The PID is a unique
 	 * reference to the DAP URL. On minor point is that the 'http://' prefix is stripped
 	 * off the front of the URL if it is present because these PIDs will need to be passed
 	 * into the servlet as part of the URL path (e.g., http://MACH/d1/mn/object/PID) and
 	 * tomcat (and others?) will convert '//' to '/' in the path part of the URL they 
 	 * receive. So, to avoid confusion and excess work in the prototype, we're going to 
-	 * remove it now. This means only HTTP URLs will work wiht the prototype servlet.
+	 * remove it now. This means only HTTP URLs will work with the prototype servlet.
 	 * 
 	 * TODO Fix this code (and/or the database) so that https DAP URLs work too.
 	 * 
@@ -375,33 +460,6 @@ public class DatasetsDatabase {
 	 */
 	public String getFormatId(String pid) throws SQLException, DAPDatabaseException {
 		return getTextMetadataItem(pid, "format");
-		/*
-		Statement stmt = c.createStatement();
-		ResultSet rs = null;
-		String format = null;
-		try {
-			int count = 0;
-			
-			String sql = "SELECT format FROM Metadata WHERE Id = '" + pid + "';";
-			rs = stmt.executeQuery(sql);
-			while (rs.next()) {
-				count++;
-				format = rs.getString("format");
-			}
-
-			if (count <= 1)
-				return format;
-			else 
-				throw new DAPDatabaseException("Corrupt database. Found more that one entry for '" + pid + "'.");
-			
-		} catch (SQLException e) {
-			log.error("Corrupt database (" + dbName + ").");
-			throw e;
-		} finally {
-			rs.close();
-			stmt.close();
-		}
-		*/
 	}
 	
 	public Date getDateSysmetaModified(String pid) throws SQLException, DAPDatabaseException {
@@ -411,40 +469,6 @@ public class DatasetsDatabase {
 		} catch (ParseException e) {
 			throw new DAPDatabaseException("Corrupt database. Malformed date/time for '" + pid + "': " + e.getMessage());	
 		}
-		/*
-		Statement stmt = c.createStatement();
-		ResultSet rs = null;
-		try {
-			String dateString = null;
-			int count = 0;
-			String sql = "SELECT dateAdded FROM Metadata WHERE Id = '" + pid + "';";
-			rs = stmt.executeQuery(sql);
-			while (rs.next()) {
-				count++;
-				dateString = rs.getString("dateAdded");
-			}
-			
-			switch (count) {
-			case 0:
-				throw new DAPDatabaseException("Corrupt database. Did not find the date for '" + pid + "'.");
-
-			case 1:
-				Date date = DateUtils.parseDate(dateString, new String[]{"yyyy-MM-dd'T'HH:mm'Z'"});
-				return date;
-
-			default:
-				throw new DAPDatabaseException("Corrupt database. Found more that date for '" + pid + "'.");	
-			}
-		} catch (SQLException e) {
-			log.error("Corrupt database (" + dbName + "): " + e.getMessage());
-			throw e;
-		} catch (ParseException e) {
-			throw new DAPDatabaseException("Corrupt database. Malformed date/time for '" + pid + "': " + e.getMessage());	
-		} finally {
-			rs.close();
-			stmt.close();
-		}
-		*/
 	}
 
 	/**
