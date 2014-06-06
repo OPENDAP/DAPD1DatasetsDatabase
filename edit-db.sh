@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# Run the Edit Database program for the DAP/D1 servlet.
+# Run the Edit Database program for the DAP/D1 servlet. Option -h for help.
 
 #profiler="-javaagent:/Users/jimg/src/jip-src-1.2/profile/profile.jar \
 #-Dprofile.properties=/Users/jimg/src/olfs/resources/profile.properties"

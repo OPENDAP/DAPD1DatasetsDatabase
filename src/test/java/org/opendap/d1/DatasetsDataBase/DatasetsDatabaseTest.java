@@ -83,7 +83,7 @@ public class DatasetsDatabaseTest extends TestCase {
 	 */
 	public void testCount() {
 		try {
-			assertEquals("Count should return 6 with test.db", db.count(), 6);
+			assertEquals("Count should return 6 with test.db", 6, db.count());
 		} catch (SQLException e) {
 			e.printStackTrace();
 			fail("Caught SQLException.");
@@ -96,11 +96,11 @@ public class DatasetsDatabaseTest extends TestCase {
 	public void testGetFormatId() {
 		try {
 			assertEquals("The fnoc1_smo PID should have a formatId of '" + DatasetsDatabase.SMO_FORMAT + "'",
-					db.getFormatId(fnoc1_smo), DatasetsDatabase.SMO_FORMAT);
+					DatasetsDatabase.SMO_FORMAT, db.getFormatId(fnoc1_smo));
 			assertEquals("The fnoc1_sdo PID should have a formatId of '" + DatasetsDatabase.SDO_FORMAT + "'",
-					db.getFormatId(fnoc1_sdo), DatasetsDatabase.SDO_FORMAT);
+					DatasetsDatabase.SDO_FORMAT, db.getFormatId(fnoc1_sdo));
 			assertEquals("The fnoc1_ore PID should have a formatId of '" + DatasetsDatabase.ORE_FORMAT + "'",
-					db.getFormatId(fnoc1_ore), DatasetsDatabase.ORE_FORMAT);
+					DatasetsDatabase.ORE_FORMAT, db.getFormatId(fnoc1_ore));
 		} catch (SQLException e) {
 			e.printStackTrace();
 			fail("Caught SQLException.");
@@ -149,8 +149,8 @@ public class DatasetsDatabaseTest extends TestCase {
 	 */
 	public void testGetDAPURL() {
 		try {
-			assertEquals("The DAP URL was wrong.", db.getDAPURL(fnoc1_sdo), fnoc1_sdo_url);
-			assertEquals("The DAP URL was wrong.", db.getDAPURL(fnoc1_smo), fnoc1_smo_url);
+			assertEquals("The DAP URL was wrong.", fnoc1_sdo_url, db.getDAPURL(fnoc1_sdo));
+			assertEquals("The DAP URL was wrong.", fnoc1_smo_url, db.getDAPURL(fnoc1_smo));
 		} catch (SQLException e) {
 			e.printStackTrace();
 			fail("Caught SQLException.");
@@ -166,8 +166,8 @@ public class DatasetsDatabaseTest extends TestCase {
 	public void testGetIdentifiersForORE() {
 		try {
 			List<String> ids = db.getIdentifiersForORE(fnoc1_ore);
-			assertEquals("This should be the SMO PID", ids.get(0), fnoc1_smo);
-			assertEquals("This should be the SDO PID", ids.get(1), fnoc1_sdo);
+			assertEquals("This should be the SMO PID", fnoc1_smo, ids.get(0));
+			assertEquals("This should be the SDO PID", fnoc1_sdo, ids.get(1));
 		} catch (SQLException e) {
 			e.printStackTrace();
 			fail("Caught SQLException.");

@@ -123,16 +123,16 @@ public class DatasetsDatabase {
 	 * @throws SQLException Thrown if the tables already exist
 	 */
 	protected void initTables() throws SQLException {
+		Statement stmt = c.createStatement();
+
 		try {
-			Statement stmt = c.createStatement();
-			String sql = "CREATE TABLE DateSysMetadataModified "
-					+ "(Id		STRING PRIMARY KEY NOT NULL,"
-					+ " date 	TEXT NOT NULL)";
-			stmt.executeUpdate(sql);
-			
-			sql = "CREATE TABLE FormatID "
-					+ "(Id		TEXT NOT NULL," // FOREIGN KEY; sqlite might not support this
-					+ " format 	TEXT NOT NULL)";
+			String sql = "CREATE TABLE Metadata "
+					+ "(Id			TEXT NOT NULL," // FOREIGN KEY; sqlite might not support this
+					+ " dateAdded 	TEXT NOT NULL,"
+					+ " format 		TEXT NOT NULL,"
+					+ " size 		TEXT NOT NULL,"
+					+ " checksum 	TEXT NOT NULL,"
+					+ " algorithm 	TEXT NOT NULL)";
 			stmt.executeUpdate(sql);
 			
 			sql = "CREATE TABLE ORE "
@@ -151,10 +151,11 @@ public class DatasetsDatabase {
 					+ " DAP_URL	TEXT NOT NULL)";
 			stmt.executeUpdate(sql);
 			
-			stmt.close();
 		} catch (SQLException e) {
 			log.error("Failed to create new database tables (" + dbName + ").");
 			throw e;
+		} finally {
+			stmt.close();			
 		}
 
 		log.debug("Made database tables successfully (" + dbName + ").");
@@ -162,7 +163,7 @@ public class DatasetsDatabase {
 	
 	public boolean isValid() throws SQLException {
 		final Set<String> tableNames 
-			= new HashSet<String>(Arrays.asList("DateSysMetadataModified", "FormatID", "ORE", "SMO", "SDO"));
+			= new HashSet<String>(Arrays.asList("Metadata", "ORE", "SMO", "SDO"));
 		
 		Statement stmt = c.createStatement();
 		String sql = "SELECT name FROM sqlite_master WHERE type='table';";
@@ -203,50 +204,57 @@ public class DatasetsDatabase {
 	 * @throws SQLException
 	 */
 	protected void addDataset(String URL) throws SQLException, Exception {
+		c.setAutoCommit(false);
+		Statement stmt = c.createStatement();
+	
 		try {
-			c.setAutoCommit(false);
-			Statement stmt = c.createStatement();
-		
 			// First add the SDO info
 			String SDO = buildId(URL, SDO_IDENT, 1);	// reuse
-			String sql = "INSERT INTO SDO (Id, DAP_URL) VALUES (" + SDO + ", " + buildDAPURL(URL, SDO_EXT) + ");";
-			stmt.executeUpdate(sql);
-			
-			sql = "INSERT INTO FormatId (Id,format) VALUES (" + SDO + ", '"  + SDO_FORMAT + "');";
+			String sql = "INSERT INTO SDO (Id, DAP_URL) VALUES ('" + SDO + "','" + buildDAPURL(URL, SDO_EXT) + "');";
 			stmt.executeUpdate(sql);
 			
 			String now8601 = ISO8601(new Date());	// reuse
-			sql = "INSERT INTO DateSysMetadataModified (Id,date) VALUES (" + SDO + ", " + now8601 + ");";
-			stmt.executeUpdate(sql);
+			Integer size = new Integer(315);
+			String checksum = "25";
+			String algorithm = "SHA-1";
 			
+			sql = "INSERT INTO Metadata (Id,dateAdded,format,size,checksum,algorithm) "
+					+ "VALUES ('" + SDO + "','" + now8601 + "','" + SDO_FORMAT + "','" + size.toString() + "','" 
+					+ checksum + "','" + algorithm + "');";
+			log.debug("SQL Statement: " + sql);
+			stmt.executeUpdate(sql);
+
 			// Then add the SMO info
 			String SMO = buildId(URL, SMO_IDENT, 1);	// reuse
-			sql = "INSERT INTO SMO (Id, DAP_URL) VALUES (" + SMO + ", " + buildDAPURL(URL, SMO_EXT) + ");";
+			sql = "INSERT INTO SMO (Id, DAP_URL) VALUES ('" + SMO + "', '" + buildDAPURL(URL, SMO_EXT) + "');";
 			stmt.executeUpdate(sql);
-			
-			sql = "INSERT INTO FormatId (Id,format) VALUES (" + SMO + ", '" + SMO_FORMAT + "');";
+
+			size = 17;
+			checksum = "1F";
+			sql = "INSERT INTO Metadata (Id,dateAdded,format,size,checksum,algorithm) "
+					+ "VALUES ('" + SMO + "','" + now8601 + "','" + SMO_FORMAT + "','" + size.toString() + "','" 
+					+ checksum + "','" + algorithm + "');";
 			stmt.executeUpdate(sql);
-			
-			sql = "INSERT INTO DateSysMetadataModified (Id,date) VALUES (" + SMO + ", " + now8601 + ");";
-			stmt.executeUpdate(sql);
-			
+
 			// Then add the ORE info
 			String ORE = buildId(URL, ORE_IDENT, 1);
-			sql = "INSERT INTO ORE (Id, SDO_Id, SMO_Id) VALUES (" + ORE + ", " + SDO + ", " + SMO + ");";
+			sql = "INSERT INTO ORE (Id, SDO_Id, SMO_Id) VALUES ('" + ORE + "', '" + SDO + "', '" + SMO + "');";
 			stmt.executeUpdate(sql);
-			
-			sql = "INSERT INTO FormatId (Id,format) VALUES (" + ORE + ", '" + ORE_FORMAT + "');";
+
+			size = 6;
+			checksum = "0F";
+			sql = "INSERT INTO Metadata (Id,dateAdded,format,size,checksum,algorithm) "
+					+ "VALUES ('" + ORE + "','" + now8601 + "','" + ORE_FORMAT + "','" + size.toString() + "','" 
+					+ checksum + "','" + algorithm + "');";
 			stmt.executeUpdate(sql);
-			
-			sql = "INSERT INTO DateSysMetadataModified (Id,date) VALUES (" + ORE + ", " + now8601 + ");";
-			stmt.executeUpdate(sql);
-			
-			stmt.close();
-			c.commit();
+
 		} catch (SQLException e) {
 			log.error("Failed to load values into new database tables (" + dbName + ").");
 			throw e;
-		} 
+		} finally {
+			stmt.close();
+			c.commit();
+		}
 	}
 	
 	/**
@@ -273,7 +281,7 @@ public class DatasetsDatabase {
 		if (URL.indexOf("https://") == 0)
 			throw new Exception("Malformed URL (cannot use HTTPS URLs.");
 		
-		if (URL.indexOf("http://") == 1)
+		if (URL.indexOf("http://") == 0)
 			URL = URL.substring(7);
 
 		int startOfPath = URL.indexOf('/'); // 'path' will include the '/' character
@@ -282,15 +290,15 @@ public class DatasetsDatabase {
 		String path = URL.substring(startOfPath);
 		String host = URL.substring(0, startOfPath);
 		
-		return "'" + host + "/dataone_" + kind + "_" + serialNumber.toString() + path + "'";
+		return host + "/dataone_" + kind + "_" + serialNumber.toString() + path;
 	}
 	
 	private String buildDAPURL(String URL, String extension) {
-		return "'" + URL + extension + "'";
+		return URL + extension;
 	}
 	
 	private String ISO8601(Date time) {
-		return "'" + String.format("%tFT%<tRZ", time) + "'";
+		return String.format("%tFT%<tRZ", time);
 	}
 
 	/**
@@ -301,28 +309,27 @@ public class DatasetsDatabase {
 	 * @throws SQLException
 	 */
 	public void dump() throws SQLException {
+		Statement stmt = c.createStatement();
+		ResultSet rs = null;
 		try {
-			Statement stmt = c.createStatement();
-			String sql = "SELECT DateSysMetadataModified.Id, DateSysMetadataModified.date, FormatId.format "
-					+ "FROM DateSysMetadataModified INNER JOIN FormatId "
-					+ "ON DateSysMetadataModified.Id = FormatId.Id "
-					+ "ORDER BY DateSysMetadataModified.ROWID;";
-			ResultSet rs = stmt.executeQuery(sql);
+			String sql = "SELECT * FROM Metadata ORDER BY ROWID;";
+			rs = stmt.executeQuery(sql);
 			while (rs.next()) {
-				String id = rs.getString("Id");
-				String date = rs.getString("date");
-				String format = rs.getString("format");
-				System.out.println("Id = " + id);
-				System.out.println("Date = " + date);
-				System.out.println("FormatId = " + format);
+				System.out.println("Id = " + rs.getString("Id"));
+				System.out.println("Date = " + rs.getString("dateAdded"));
+				System.out.println("FormatId = " + rs.getString("format"));
+				System.out.println("Size = " + rs.getString("size"));
+				System.out.println("Checksum = " + rs.getString("checksum"));
+				System.out.println("Algorithm = " + rs.getString("algorithm"));
 				System.out.println();
 			}
-			rs.close();
-			stmt.close();
 
 		} catch (SQLException e) {
 			log.error("Failed to dump database tables (" + dbName + ").");
 			throw e;
+		} finally {
+			rs.close();
+			stmt.close();
 		}
 	}
 	
@@ -334,27 +341,26 @@ public class DatasetsDatabase {
 	 * @throws SQLException
 	 */
 	public int count() throws SQLException {
-		int rows = 0;
+		Statement stmt = c.createStatement();
+		ResultSet rs = null;
 		try {
-			Statement stmt = c.createStatement();
-			// Don't really need the inner join here since Date... and FormatId should 
-			// have the same number of rows.
-			String sql = "SELECT COUNT(*) "
-					+ "FROM DateSysMetadataModified INNER JOIN FormatId "
-					+ "ON DateSysMetadataModified.Id = FormatId.Id "
-					+ "ORDER BY DateSysMetadataModified.ROWID;";
-			ResultSet rs = stmt.executeQuery(sql);
+			String sql = "SELECT COUNT(*) FROM Metadata ORDER BY ROWID;";
+
+			int rows = 0;
+			rs = stmt.executeQuery(sql);
 			while (rs.next()) {
 				rows = rs.getInt("COUNT(*)");
 			}
-			rs.close();
-			stmt.close();
+
+			return rows;
+			
 		} catch (SQLException e) {
 			log.error("Failed to dump database tables (" + dbName + ").");
 			throw e;
+		} finally {
+			rs.close();
+			stmt.close();
 		}
-		
-		return rows;
 	}
 	
 	/**
@@ -368,29 +374,148 @@ public class DatasetsDatabase {
 	 * @throws Exception
 	 */
 	public String getFormatId(String pid) throws SQLException, DAPDatabaseException {
+		return getTextMetadataItem(pid, "format");
+		/*
+		Statement stmt = c.createStatement();
+		ResultSet rs = null;
 		String format = null;
 		try {
 			int count = 0;
-			Statement stmt = c.createStatement();
-			String sql = "SELECT format FROM FormatId WHERE FormatId.Id = '" + pid + "';";
-			ResultSet rs = stmt.executeQuery(sql);
+			
+			String sql = "SELECT format FROM Metadata WHERE Id = '" + pid + "';";
+			rs = stmt.executeQuery(sql);
 			while (rs.next()) {
 				count++;
 				format = rs.getString("format");
 			}
-			rs.close();
-			stmt.close();
 
 			if (count <= 1)
 				return format;
 			else 
 				throw new DAPDatabaseException("Corrupt database. Found more that one entry for '" + pid + "'.");
+			
 		} catch (SQLException e) {
 			log.error("Corrupt database (" + dbName + ").");
 			throw e;
+		} finally {
+			rs.close();
+			stmt.close();
+		}
+		*/
+	}
+	
+	public Date getDateSysmetaModified(String pid) throws SQLException, DAPDatabaseException {
+		String dateString =  getTextMetadataItem(pid, "dateAdded");
+		try {
+			return DateUtils.parseDate(dateString, new String[]{"yyyy-MM-dd'T'HH:mm'Z'"});
+		} catch (ParseException e) {
+			throw new DAPDatabaseException("Corrupt database. Malformed date/time for '" + pid + "': " + e.getMessage());	
+		}
+		/*
+		Statement stmt = c.createStatement();
+		ResultSet rs = null;
+		try {
+			String dateString = null;
+			int count = 0;
+			String sql = "SELECT dateAdded FROM Metadata WHERE Id = '" + pid + "';";
+			rs = stmt.executeQuery(sql);
+			while (rs.next()) {
+				count++;
+				dateString = rs.getString("dateAdded");
+			}
+			
+			switch (count) {
+			case 0:
+				throw new DAPDatabaseException("Corrupt database. Did not find the date for '" + pid + "'.");
+
+			case 1:
+				Date date = DateUtils.parseDate(dateString, new String[]{"yyyy-MM-dd'T'HH:mm'Z'"});
+				return date;
+
+			default:
+				throw new DAPDatabaseException("Corrupt database. Found more that date for '" + pid + "'.");	
+			}
+		} catch (SQLException e) {
+			log.error("Corrupt database (" + dbName + "): " + e.getMessage());
+			throw e;
+		} catch (ParseException e) {
+			throw new DAPDatabaseException("Corrupt database. Malformed date/time for '" + pid + "': " + e.getMessage());	
+		} finally {
+			rs.close();
+			stmt.close();
+		}
+		*/
+	}
+
+	/**
+	 * Return the size of the object.
+	 * 
+	 * @param pid
+	 * @return
+	 * @throws SQLException
+	 * @throws DAPDatabaseException
+	 */
+	public String getSize(String pid) throws SQLException, DAPDatabaseException {
+		return getTextMetadataItem(pid, "size");
+	}
+	
+	/**
+	 * Return the checksum for the object.
+	 * @param pid
+	 * @return
+	 * @throws SQLException
+	 * @throws DAPDatabaseException
+	 */
+	public String getChecksum(String pid) throws SQLException, DAPDatabaseException {
+		return getTextMetadataItem(pid, "checksum");
+	}
+	
+	/**
+	 * Return the checksum algorithm for the object.
+	 * @param pid
+	 * @return
+	 * @throws SQLException
+	 * @throws DAPDatabaseException
+	 */
+	public String getAlgorithm(String pid) throws SQLException, DAPDatabaseException {
+		return getTextMetadataItem(pid, "algorithm");
+	}
+	
+	private String getTextMetadataItem(String pid, String field) throws SQLException, DAPDatabaseException {
+		Statement stmt = c.createStatement();
+		ResultSet rs = null;
+		String item = null;
+		try {
+			int count = 0;
+			
+			String sql = "SELECT " + field + " FROM Metadata WHERE Id = '" + pid + "';";
+			rs = stmt.executeQuery(sql);
+			while (rs.next()) {
+				count++;
+				item = rs.getString(field);
+			}
+
+			switch (count) {
+			case 0:
+				throw new DAPDatabaseException("Corrupt database. Did not find '" + field + "' for '" + pid + "'.");
+
+			case 1:
+				return item;
+
+			default:
+				throw new DAPDatabaseException("Corrupt database. Found more than one '" + field + "' for '" + pid + "'.");
+			}
+			
+		} catch (SQLException e) {
+			log.error("Corrupt database (" + dbName + ").");
+			throw e;
+		} finally {
+			rs.close();
+			stmt.close();
 		}
 	}
 	
+
 	/**
 	 * Does the D1 PID reference a DAP URL? This uses a pretty weak test - it assumes
 	 * that there is one format for an ORE document and that if a PID does not reference
@@ -449,8 +574,7 @@ public class DatasetsDatabase {
 				throw new DAPDatabaseException("Did not find a DAP URL entry for '" + pid + "'.");
 
 			case 1:
-				// TODO resolve this 'protocol' mess; maybe add a table (Id, protocol)?
-				return "http://" + URL;
+				return URL;
 
 			default:
 				throw new DAPDatabaseException("Corrupt database. Found more that one entry for '" + pid + "'.");	
@@ -502,42 +626,6 @@ public class DatasetsDatabase {
 		} catch (SQLException e) {
 			log.error("Corrupt database (" + dbName + "): " + e.getMessage());
 			throw e;
-		} finally {
-			rs.close();
-			stmt.close();
-		}
-	}
-
-	public Date getDateSysmetaModified(String pid) throws SQLException, DAPDatabaseException {
-		Statement stmt = c.createStatement();
-		ResultSet rs = null;
-		try {
-			String dateString = null;
-			int count = 0;
-			String sql = "SELECT DateSysMetadataModified.date FROM DateSysMetadataModified "
-					+ "WHERE DateSysMetadataModified.Id = '" + pid + "';";
-			rs = stmt.executeQuery(sql);
-			while (rs.next()) {
-				count++;
-				dateString = rs.getString("date");
-			}
-			
-			switch (count) {
-			case 0:
-				throw new DAPDatabaseException("Corrupt database. Did not find the date for '" + pid + "'.");
-
-			case 1:
-				Date date = DateUtils.parseDate(dateString, new String[]{"yyyy-MM-dd'T'HH:mm'Z'"});
-				return date;
-
-			default:
-				throw new DAPDatabaseException("Corrupt database. Found more that date for '" + pid + "'.");	
-			}
-		} catch (SQLException e) {
-			log.error("Corrupt database (" + dbName + "): " + e.getMessage());
-			throw e;
-		} catch (ParseException e) {
-			throw new DAPDatabaseException("Corrupt database. Malformed date/time for '" + pid + "': " + e.getMessage());	
 		} finally {
 			rs.close();
 			stmt.close();

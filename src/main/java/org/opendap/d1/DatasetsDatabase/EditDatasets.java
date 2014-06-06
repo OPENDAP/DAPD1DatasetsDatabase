@@ -21,6 +21,10 @@
  */
 package org.opendap.d1.DatasetsDatabase;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStreamReader;
 import java.io.PrintStream;
 
 import org.apache.commons.cli.CommandLine;
@@ -60,6 +64,7 @@ public class EditDatasets {
 
 		options.addOption("v", "verbose", false, "Write info to stdout");
 		options.addOption("i", "initialize", false, "Create tables for a blank database");
+		options.addOption("r", "read", true, "Read dataset URLs from a file, else read URLs from the command line");
 		options.addOption("h", "help", false, "Usage information");
 		
 		try {
@@ -96,6 +101,23 @@ public class EditDatasets {
 		    	return;
 		    }
 		    	
+		    if (line.hasOption("r")) {
+		    	// Open the file
+		    	FileInputStream fstream = new FileInputStream(line.getOptionValue("r"));
+		    	BufferedReader br = new BufferedReader(new InputStreamReader(fstream));
+
+		    	String strLine;
+
+		    	//Read File Line By Line
+		    	while ((strLine = br.readLine()) != null)   {
+			    	if (verbose)
+			    		ps.println("Adding URL to database... " + strLine);
+			    	db.addDataset(strLine);
+		    	}
+
+		    	//Close the input stream
+		    	br.close();
+		    }
 		    
 		    for (int i = 1; i < remainingArgs.length; ++i) {
 		    	if (verbose)
