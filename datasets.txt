@@ -1,0 +1,2 @@
+http://test.opendap.org/opendap/hyrax/data/nc/fnoc1.nc
+http://test.opendap.org/opendap/hyrax/data/nc/coads_climatology.nc
