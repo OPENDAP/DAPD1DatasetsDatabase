@@ -217,6 +217,27 @@ public class DatasetsDatabase {
 	}
 	
 	/**
+	 * Is the PID in the database? Lookup the PID in the datbase's Metadata
+	 * table and return true if it's found.
+	 * 
+	 * @param pid The D1 PID to look for
+	 * @return True if found.
+	 * @throws DAPDatabaseException 
+	 * @throws SQLException 
+	 */
+	public boolean isInMetadata(String pid) {
+		try {
+			return getTextMetadataItem(pid, "Id") != null;
+		} catch (SQLException e) {
+			log.error("Error querying the database (" + dbName + ") for PID: " + pid + ".");
+			return false;
+		} catch (DAPDatabaseException e) {
+			log.error("Error querying the database (" + dbName + ") for PID: " + pid + ".");
+			return false;
+		}
+	}
+	
+	/**
 	 * This version of loadDataset assumes that the SDO will be a netCDF file
 	 * and the SMO will be a ISO 19115 document. It uses the current time as
 	 * 'date added or modified.'

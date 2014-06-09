@@ -189,6 +189,16 @@ public class DatasetsDatabaseTest extends TestCase {
 			e.printStackTrace();
 			fail("Caught DAPDatabaseException");
 		}
-		
+	}
+	
+	public void testIsInMetadata() {
+		try {
+			assertTrue("This should be found", db.isInMetadata(fnoc1_smo));
+			assertTrue("This should be found", db.isInMetadata(fnoc1_sdo));
+			assertTrue("This should be found", db.isInMetadata(fnoc1_ore));
+		} catch (Exception e) {
+			e.printStackTrace();
+			fail("Caught SQLException.");
+		}		
 	}
 }
