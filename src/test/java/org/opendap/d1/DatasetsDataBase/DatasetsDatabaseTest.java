@@ -3,16 +3,17 @@
  */
 package org.opendap.d1.DatasetsDataBase;
 
+import java.math.BigInteger;
 import java.sql.SQLException;
 import java.util.Date;
 import java.util.List;
 
-import org.opendap.d1.DatasetsDatabase.DAPDatabaseException;
-import org.opendap.d1.DatasetsDatabase.DatasetsDatabase;
-
 import junit.framework.Test;
 import junit.framework.TestCase;
 import junit.framework.TestSuite;
+
+import org.opendap.d1.DatasetsDatabase.DAPDatabaseException;
+import org.opendap.d1.DatasetsDatabase.DatasetsDatabase;
 
 /**
  * @author jimg
@@ -201,4 +202,22 @@ public class DatasetsDatabaseTest extends TestCase {
 			fail("Caught SQLException.");
 		}		
 	}
+	
+	/**
+	 * Test method for {@link org.opendap.d1.DatasetsDatabase.DatasetsDatabase#getIdentifiersForORE(java.lang.String)}.
+	 */
+	public void testGetSerialNumber() {
+		try {
+			assertEquals("This should be 1", db.getSerialNumber(fnoc1_sdo), new BigInteger("1"));
+			assertEquals("This should be 1", db.getSerialNumber(fnoc1_smo), new BigInteger("1"));
+		} catch (SQLException e) {
+			e.printStackTrace();
+			fail("Caught SQLException.");
+		} catch (DAPDatabaseException e) {
+			e.printStackTrace();
+			fail("Caught DAPDatabaseException");
+		}
+	}
+	
+
 }

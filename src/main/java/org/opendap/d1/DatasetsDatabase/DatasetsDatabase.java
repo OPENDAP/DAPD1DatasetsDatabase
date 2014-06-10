@@ -21,14 +21,15 @@
  */
 package org.opendap.d1.DatasetsDatabase;
 
-import org.opendap.d1.DatasetsDatabase.DAPDatabaseException;
-
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-//import java.io.InputStream;
+import java.math.BigInteger;
 import java.net.URISyntaxException;
-//import java.security.NoSuchAlgorithmException;
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.text.ParseException;
 import java.util.Arrays;
 import java.util.Date;
@@ -54,6 +55,8 @@ import org.dataone.service.types.v1.util.ChecksumUtil;
 import org.dspace.foresite.OREException;
 import org.dspace.foresite.ORESerialiserException;
 import org.dspace.foresite.ResourceMap;
+//import java.io.InputStream;
+//import java.security.NoSuchAlgorithmException;
 
 /**
  * @brief A database of stuff for the DAP/D1 servlet.
@@ -149,6 +152,7 @@ public class DatasetsDatabase {
 			String sql = "CREATE TABLE Metadata "
 					+ "(Id			TEXT NOT NULL," // FOREIGN KEY; sqlite might not support this
 					+ " dateAdded 	TEXT NOT NULL,"
+					+ " serialNumber INT NOT NULL,"
 					+ " format 		TEXT NOT NULL,"
 					+ " size 		TEXT NOT NULL,"
 					+ " checksum 	TEXT NOT NULL,"
@@ -241,6 +245,7 @@ public class DatasetsDatabase {
 	 * This version of loadDataset assumes that the SDO will be a netCDF file
 	 * and the SMO will be a ISO 19115 document. It uses the current time as
 	 * 'date added or modified.'
+	 * 
 	 * @param URL This is the base URL of the DAP Access point. DAP2 assumed.
 	 * @throws SQLException
 	 */
@@ -251,9 +256,10 @@ public class DatasetsDatabase {
 		try {
 			// Use this ISO601 time string for all three entries
 			String now8601 = ISO8601(new Date());
+			Long serialNumber = new Long(1);	// when calling, dataset is always new
 			
 			// First add the SDO info
-			String SDO = buildId(URL, SDO_IDENT, 1);	// reuse
+			String SDO = buildId(URL, SDO_IDENT, serialNumber);	// reuse
 			String SDOURL = buildDAPURL(URL, SDO_EXT);
 			String sql = "INSERT INTO SDO (Id, DAP_URL) VALUES ('" + SDO + "','" + SDOURL + "');";
 			stmt.executeUpdate(sql);
@@ -263,14 +269,10 @@ public class DatasetsDatabase {
 			Long size = new Long(cis.getByteCount());
 			cis.close();
 			
-			sql = "INSERT INTO Metadata (Id,dateAdded,format,size,checksum,algorithm) "
-					+ "VALUES ('" + SDO + "','" + now8601 + "','" + SDO_FORMAT + "','" + size.toString() + "','" 
-					+ checksum.getValue() + "','" + checksum.getAlgorithm() + "');";
-			log.debug("SQL Statement: " + sql);
-			stmt.executeUpdate(sql);
+			insertMetadata(stmt, now8601, serialNumber, SDO, SDO_FORMAT, checksum, size);
 
 			// Then add the SMO info
-			String SMO = buildId(URL, SMO_IDENT, 1);	// reuse
+			String SMO = buildId(URL, SMO_IDENT, serialNumber);	// reuse
 			String SMOURL = buildDAPURL(URL, SMO_EXT);
 			sql = "INSERT INTO SMO (Id, DAP_URL) VALUES ('" + SMO + "', '" + SMOURL + "');";
 			stmt.executeUpdate(sql);
@@ -280,13 +282,10 @@ public class DatasetsDatabase {
 			size = new Long(cis.getByteCount());
 			cis.close();
 			
-			sql = "INSERT INTO Metadata (Id,dateAdded,format,size,checksum,algorithm) "
-					+ "VALUES ('" + SMO + "','" + now8601 + "','" + SMO_FORMAT + "','" + size.toString() + "','" 
-					+ checksum.getValue() + "','" + checksum.getAlgorithm() + "');";
-			stmt.executeUpdate(sql);
+			insertMetadata(stmt, now8601, serialNumber, SMO, SMO_FORMAT, checksum, size);
 
 			// Then add the ORE info
-			String ORE = buildId(URL, ORE_IDENT, 1);
+			String ORE = buildId(URL, ORE_IDENT, serialNumber);
 			sql = "INSERT INTO ORE (Id, SDO_Id, SMO_Id) VALUES ('" + ORE + "', '" + SDO + "', '" + SMO + "');";
 			stmt.executeUpdate(sql);
 
@@ -295,10 +294,7 @@ public class DatasetsDatabase {
 			size = new Long(cis.getByteCount());
 			cis.close();
 			
-			sql = "INSERT INTO Metadata (Id,dateAdded,format,size,checksum,algorithm) "
-					+ "VALUES ('" + ORE + "','" + now8601 + "','" + ORE_FORMAT + "','" + size.toString() + "','" 
-					+ checksum.getValue() + "','" + checksum.getAlgorithm() + "');";
-			stmt.executeUpdate(sql);
+			insertMetadata(stmt, now8601, serialNumber, ORE, ORE_FORMAT, checksum, size);
 
 		} catch (SQLException e) {
 			log.error("Failed to load values into new database tables (" + dbName + ").");
@@ -307,6 +303,27 @@ public class DatasetsDatabase {
 			stmt.close();
 			c.commit();
 		}
+	}
+
+	/**
+	 * Convenience method to set columns in the creatively-named 'Metadata' table.
+	 * 
+	 * @param stmt
+	 * @param now8601
+	 * @param servialNumber
+	 * @param PID
+	 * @param format
+	 * @param checksum
+	 * @param size
+	 * @throws SQLException
+	 */
+	private void insertMetadata(Statement stmt, String now8601, Long serialNumber, String PID, String format, Checksum checksum, Long size) 
+			throws SQLException {
+		String sql = "INSERT INTO Metadata (Id,dateAdded,serialNumber,format,size,checksum,algorithm) "
+				+ "VALUES ('" + PID + "','" + now8601 + "','" + serialNumber.toString() + "','" + format 
+				+ "','" + size.toString() + "','" + checksum.getValue() + "','" + checksum.getAlgorithm() + "');";
+		log.debug("SQL Statement: " + sql);
+		stmt.executeUpdate(sql);
 	}
 	
 	/**
@@ -380,7 +397,7 @@ public class DatasetsDatabase {
 	 * @return
 	 * @throws Exception
 	 */
-	private String buildId(String URL, String kind, Integer serialNumber) throws Exception {
+	private String buildId(String URL, String kind, Long serialNumber) throws Exception {
 		// parse the URL: http://<mach&port>/<path> so we can make it look like
 		// http://<mach&port>/dataone_<kind>_<serial_no>/<path>
 		
@@ -502,6 +519,18 @@ public class DatasetsDatabase {
 	 */
 	public String getSize(String pid) throws SQLException, DAPDatabaseException {
 		return getTextMetadataItem(pid, "size");
+	}
+
+	/**
+	 * Return the serialNumber of the object.
+	 * 
+	 * @param pid
+	 * @return
+	 * @throws SQLException
+	 * @throws DAPDatabaseException
+	 */
+	public BigInteger getSerialNumber(String pid) throws SQLException, DAPDatabaseException {
+		return new BigInteger(getTextMetadataItem(pid, "serialNumber"));
 	}
 	
 	/**
