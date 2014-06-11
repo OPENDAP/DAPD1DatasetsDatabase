@@ -22,7 +22,6 @@
 package org.opendap.d1.DatasetsDatabase;
 
 import java.io.BufferedReader;
-//import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
@@ -32,6 +31,7 @@ import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.GnuParser;
 import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Options;
+//import java.io.File;
 //import org.apache.commons.cli.PosixParser;
 
 //import org.apache.log4j.Logger;
@@ -126,7 +126,7 @@ public class EditDatasets {
 		    }
 		    
 		    if (verbose) {
-		    	ps.println("Rows in the database: " + db.count());
+		    	ps.println("Rows in the database: " + db.count(""));
 		    	db.dump();
 		    }
 		}

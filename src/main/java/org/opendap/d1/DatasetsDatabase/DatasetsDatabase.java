@@ -102,7 +102,7 @@ public class DatasetsDatabase {
 	 * the object goes out of scope, when its finalize() method closes the connection.
 	 * 
 	 * @param name The name of the database file
-	 * @exception Exception is thrown if the sqlite class is not found or the 
+	 * @exception Exception is thrown if the SQLite class is not found or the 
 	 * connection cannot be opened.
 	 * 
 	 */
@@ -317,8 +317,9 @@ public class DatasetsDatabase {
 	 * @param size
 	 * @throws SQLException
 	 */
-	private void insertMetadata(Statement stmt, String now8601, Long serialNumber, String PID, String format, Checksum checksum, Long size) 
-			throws SQLException {
+	private void insertMetadata(Statement stmt, String now8601, Long serialNumber, String PID, String format, 
+			Checksum checksum, Long size) throws SQLException {
+		
 		String sql = "INSERT INTO Metadata (Id,dateAdded,serialNumber,format,size,checksum,algorithm) "
 				+ "VALUES ('" + PID + "','" + now8601 + "','" + serialNumber.toString() + "','" + format 
 				+ "','" + size.toString() + "','" + checksum.getValue() + "','" + checksum.getAlgorithm() + "');";
@@ -421,7 +422,7 @@ public class DatasetsDatabase {
 	}
 	
 	private String ISO8601(Date time) {
-		return String.format("%tFT%<tRZ", time);
+		return String.format("%tFT%<tT", time);
 	}
 
 	/**
@@ -463,11 +464,11 @@ public class DatasetsDatabase {
 	 * @return The count of Unique PIDs.
 	 * @throws SQLException
 	 */
-	public int count() throws SQLException {
+	public int count(String where) throws SQLException {
 		Statement stmt = c.createStatement();
 		ResultSet rs = null;
 		try {
-			String sql = "SELECT COUNT(*) FROM Metadata ORDER BY ROWID;";
+			String sql = "SELECT COUNT(*) FROM Metadata " + where + " ORDER BY ROWID;";
 
 			int rows = 0;
 			rs = stmt.executeQuery(sql);
@@ -478,7 +479,7 @@ public class DatasetsDatabase {
 			return rows;
 			
 		} catch (SQLException e) {
-			log.error("Failed to dump database tables (" + dbName + ").");
+			log.error("Failed to count the Metadata table (" + dbName + "): " + e.getMessage());
 			throw e;
 		} finally {
 			rs.close();
@@ -503,7 +504,7 @@ public class DatasetsDatabase {
 	public Date getDateSysmetaModified(String pid) throws SQLException, DAPDatabaseException {
 		String dateString =  getTextMetadataItem(pid, "dateAdded");
 		try {
-			return DateUtils.parseDate(dateString, new String[]{"yyyy-MM-dd'T'HH:mm'Z'"});
+			return DateUtils.parseDate(dateString, new String[]{"yyyy-MM-dd'T'HH:mm:ss"});
 		} catch (ParseException e) {
 			throw new DAPDatabaseException("Corrupt database. Malformed date/time for '" + pid + "': " + e.getMessage());	
 		}
@@ -583,6 +584,52 @@ public class DatasetsDatabase {
 		} catch (SQLException e) {
 			log.error("Corrupt database (" + dbName + ").");
 			throw e;
+		} finally {
+			rs.close();
+			stmt.close();
+		}
+	}
+	
+	/**
+	 * Get metadata about PIDs known to this server. This method will return 'count'
+	 * rows, starting at 'start' using the SQL constraint provided by the string 'where'.
+	 * This code is very literal in how 'where' must be formatted; the value will be
+	 * combined with: "SELECT * FROM Metadata " + where + " ORDER BY ROWID;" and sent
+	 * to the database withotu any error checking.
+	 * 
+	 * @param where
+	 * @param start
+	 * @param count
+	 * @return A List of DatasetMetadata objects.
+	 * @throws SQLException
+	 * @throws DAPDatabaseException
+	 */
+	public List<DatasetMetadata> getAllMetadata(String where, int start, int count) throws SQLException, DAPDatabaseException {
+		Statement stmt = c.createStatement();
+		ResultSet rs = null;
+		Vector<DatasetMetadata> dmv = new Vector<DatasetMetadata>();
+		try {
+			String querySQL = "SELECT * FROM Metadata " + where + " ORDER BY ROWID;";
+			rs = stmt.executeQuery(querySQL);
+			int i = 0;
+			while (rs.next()) {
+				// Could use a paged query for this
+				++i;
+				if (i <= start)
+					continue;
+				if (i > start + count)
+					break;
+				dmv.add(new DatasetMetadata(rs.getString("Id"), rs.getString("format"), rs.getString("checksum"),
+						rs.getString("algorithm"), rs.getString("size"), rs.getString("dateAdded")));
+			}
+			
+			return dmv;
+		} catch (SQLException e) {
+			log.error("Corrupt database (" + dbName + "): " + e.getMessage());
+			throw e;
+		} catch (ParseException e) {
+			log.error("Corrupt database (" + dbName + "). Could not parse a Date/Time value: " + e.getMessage());
+			throw new DAPDatabaseException(e.getMessage());
 		} finally {
 			rs.close();
 			stmt.close();

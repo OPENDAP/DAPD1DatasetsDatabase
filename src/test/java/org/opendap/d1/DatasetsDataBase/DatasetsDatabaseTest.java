@@ -13,6 +13,7 @@ import junit.framework.TestCase;
 import junit.framework.TestSuite;
 
 import org.opendap.d1.DatasetsDatabase.DAPDatabaseException;
+import org.opendap.d1.DatasetsDatabase.DatasetMetadata;
 import org.opendap.d1.DatasetsDatabase.DatasetsDatabase;
 
 /**
@@ -84,7 +85,8 @@ public class DatasetsDatabaseTest extends TestCase {
 	 */
 	public void testCount() {
 		try {
-			assertEquals("Count should return 6 with test.db", 6, db.count());
+			assertEquals("Count should return 6 with test.db", 6, db.count(""));
+			assertEquals("Count should return 2 with test.db", 2, db.count("WHERE format='netcdf'"));
 		} catch (SQLException e) {
 			e.printStackTrace();
 			fail("Caught SQLException.");
@@ -219,5 +221,30 @@ public class DatasetsDatabaseTest extends TestCase {
 		}
 	}
 	
+	public void testGetAllMetadata() {
+		try {
+			List<DatasetMetadata> dmv = db.getAllMetadata("", 0, 10);
+			
+			assertEquals("There should be 6 DatasetMetadata objects in the list", 6, dmv.size());
+			DatasetMetadata dm = dmv.get(0);
+			assertEquals("This should be the fnoc1 SDO PID", fnoc1_sdo, dm.getPID());
+			
+			dmv = db.getAllMetadata("", 2, 2);
+			assertEquals("There should be 2 DatasetMetadata objects in the list", 2, dmv.size());
+			dm = dmv.get(0);
+			assertEquals("This should be the fnoc1 ORE PID", fnoc1_ore, dm.getPID());
+			dm = dmv.get(1);
+			assertEquals("This should be the coads SDO PID", 
+					"test.opendap.org/dataone_sdo_1/opendap/hyrax/data/nc/coads_climatology.nc", dm.getPID());
+			
+		} catch (SQLException e) {
+			e.printStackTrace();
+			fail("Caught SQLException.");
+		} catch (DAPDatabaseException e) {
+			e.printStackTrace();
+			fail("Caught DAPDatabaseException");
+		}
+		
+	}
 
 }
