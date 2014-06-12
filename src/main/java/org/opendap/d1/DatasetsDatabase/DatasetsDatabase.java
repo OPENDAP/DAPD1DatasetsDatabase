@@ -41,7 +41,6 @@ import java.util.Set;
 import java.util.Vector;
 
 import org.apache.commons.io.input.CountingInputStream;
-import org.apache.commons.lang.time.DateUtils;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.HttpClient;
@@ -255,7 +254,7 @@ public class DatasetsDatabase {
 	
 		try {
 			// Use this ISO601 time string for all three entries
-			String now8601 = ISO8601(new Date());
+			String now8601 = DAPD1DateParser.DateToString(new Date());
 			Long serialNumber = new Long(1);	// when calling, dataset is always new
 			
 			// First add the SDO info
@@ -421,10 +420,6 @@ public class DatasetsDatabase {
 		return URL + extension;
 	}
 	
-	private String ISO8601(Date time) {
-		return String.format("%tFT%<tT", time);
-	}
-
 	/**
 	 * Dump the database contents to stdout. This only dumps the fields common
 	 * to all of the PIDs in the database (it does not show the DAP URL or 
@@ -504,7 +499,7 @@ public class DatasetsDatabase {
 	public Date getDateSysmetaModified(String pid) throws SQLException, DAPDatabaseException {
 		String dateString =  getTextMetadataItem(pid, "dateAdded");
 		try {
-			return DateUtils.parseDate(dateString, new String[]{"yyyy-MM-dd'T'HH:mm:ss"});
+			return DAPD1DateParser.StringToDate(dateString);
 		} catch (ParseException e) {
 			throw new DAPDatabaseException("Corrupt database. Malformed date/time for '" + pid + "': " + e.getMessage());	
 		}
