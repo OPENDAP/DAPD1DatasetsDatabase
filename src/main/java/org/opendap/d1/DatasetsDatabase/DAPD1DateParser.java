@@ -25,7 +25,8 @@ package org.opendap.d1.DatasetsDatabase;
 import java.text.ParseException;
 import java.util.Date;
 
-import org.apache.commons.lang.time.DateUtils;
+import org.dataone.service.util.DateTimeMarshaller;
+//import org.apache.commons.lang.time.DateUtils;
 
 /**
  * Centralize parsing strings to Date objects and Date objects to strings for
@@ -42,11 +43,19 @@ public class DAPD1DateParser {
 	}
 
 	public static Date StringToDate(String dateString) throws ParseException {
-		return DateUtils.parseDate(dateString, new String[]{"yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd'T'HH:mm:ss.SSS", 
-				"yyyy-MM-dd'T'HH:mm:ssZ", "yyyy-MM-dd'T'HH:mm:ss.SSSZ"});
+		return DateTimeMarshaller.deserializeDateToUTC(dateString);
+		
+		// This is slightly broken WRT the docs because they show the time zone
+		// as 00:00 and not 0000 which is what Z will parse. 
+		// http://mule1.dataone.org/ArchitectureDocs-current/apis/Types.html#Types.DateTime
+		// jhrg 6/12/14
+		//
+		// return DateUtils.parseDate(dateString, new String[]{"yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd'T'HH:mm:ss.SSS", 
+		//		"yyyy-MM-dd'T'HH:mm:ssZ", "yyyy-MM-dd'T'HH:mm:ss.SSSZ"});
 	}
 	
 	public static String DateToString(Date date) {
-		return String.format("%tFT%<tT", date);
+		return DateTimeMarshaller.serializeDateToUTC(date);
+		// return String.format("%tFT%<tT", date);
 	}
 }

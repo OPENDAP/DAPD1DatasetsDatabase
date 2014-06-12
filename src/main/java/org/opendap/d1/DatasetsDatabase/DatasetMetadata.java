@@ -26,8 +26,6 @@ import java.math.BigInteger;
 import java.text.ParseException;
 import java.util.Date;
 
-import org.apache.commons.lang.time.DateUtils;
-
 public class DatasetMetadata {
 
 	private String PID;
@@ -62,8 +60,7 @@ public class DatasetMetadata {
 		this.checksum = checksum;
 		this.algorithm = algorithm;
 		this.size = new BigInteger(size);
-		this.dateSystemMetadataModified = DateUtils.parseDate(dateAdded, new String[]{"yyyy-MM-dd'T'HH:mm:ss"});
-		// DateTimeMarshaller.deserializeDateToUTC(dateAdded);
+		this.dateSystemMetadataModified = DAPD1DateParser.StringToDate(dateAdded);
 	}
 	
 	public String getPID() {
