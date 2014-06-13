@@ -89,7 +89,7 @@ public class DatasetsDatabase {
 	/// D1 ORE
 	public static String ORE_IDENT = "ore";
 	/// ORE D1 formatID
-	public static String ORE_FORMAT = "http://www.openarchives.org/ore/terms/";
+	public static String ORE_FORMAT = "http://www.openarchives.org/ore/terms";
 
 	private static Logger log = Logger.getLogger(DatasetsDatabase.class);
 	
@@ -137,7 +137,7 @@ public class DatasetsDatabase {
 	 * Build the tables, assumes the DB is empty.
 	 * 
 	 * Note also that the foreign key constraints have been removed because
-	 * sqlite on my computer does not seem to support them or the syntax is odd
+	 * SQLite on my computer does not seem to support them or the syntax is odd
 	 * or something. See the SQLite docs at
 	 * http://www.sqlite.org/foreignkeys.html for more info on this including to
 	 * compile SQLite so that it supports foreign keys.
