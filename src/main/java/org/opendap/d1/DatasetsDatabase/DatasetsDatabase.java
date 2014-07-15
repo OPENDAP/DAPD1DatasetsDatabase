@@ -54,8 +54,6 @@ import org.dataone.service.types.v1.util.ChecksumUtil;
 import org.dspace.foresite.OREException;
 import org.dspace.foresite.ORESerialiserException;
 import org.dspace.foresite.ResourceMap;
-//import java.io.InputStream;
-//import java.security.NoSuchAlgorithmException;
 
 /**
  * @brief A database of stuff for the DAP/D1 servlet.

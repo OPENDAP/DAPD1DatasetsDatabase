@@ -31,13 +31,6 @@ import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.GnuParser;
 import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Options;
-//import java.io.File;
-//import org.apache.commons.cli.PosixParser;
-
-//import org.apache.log4j.Logger;
-
-// import org.slf4j.Logger;
-// import org.slf4j.LoggerFactory;
 
 /**
  * @brief Create, Read, Update, Delete tool for the DAP/D1 servlet's database
@@ -51,8 +44,6 @@ import org.apache.commons.cli.Options;
  */
 public class EditDatasets {
 	
-    // private static Logger log = Logger.getLogger(EditDatasets.class);
-    
 	/**
 	 * @param args
 	 */

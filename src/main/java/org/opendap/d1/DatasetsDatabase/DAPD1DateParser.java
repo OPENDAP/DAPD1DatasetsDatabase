@@ -26,7 +26,6 @@ import java.text.ParseException;
 import java.util.Date;
 
 import org.dataone.service.util.DateTimeMarshaller;
-//import org.apache.commons.lang.time.DateUtils;
 
 /**
  * Centralize parsing strings to Date objects and Date objects to strings for
