@@ -46,7 +46,6 @@ import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.DefaultHttpClient;
-import org.apache.log4j.Logger;
 import org.dataone.ore.ResourceMapFactory;
 import org.dataone.service.types.v1.Checksum;
 import org.dataone.service.types.v1.Identifier;
@@ -54,6 +53,8 @@ import org.dataone.service.types.v1.util.ChecksumUtil;
 import org.dspace.foresite.OREException;
 import org.dspace.foresite.ORESerialiserException;
 import org.dspace.foresite.ResourceMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * @brief A database of stuff for the DAP/D1 servlet.
@@ -89,7 +90,7 @@ public class DatasetsDatabase {
 	/// ORE D1 formatID
 	public static String ORE_FORMAT = "http://www.openarchives.org/ore/terms";
 
-	private static Logger log = Logger.getLogger(DatasetsDatabase.class);
+	private static Logger log = LoggerFactory.getLogger(DatasetsDatabase.class);
 	
 	private static String dbName = "";
 	private Connection c = null;
@@ -201,7 +202,7 @@ public class DatasetsDatabase {
 				}
 			}
 			if (count != tableNames.size()) {
-				log.error("Database failed validity test; does not have all the required tables.");
+				log.error("Database failed validity test; does not have the required tables.");
 				return false;
 			}
 			
