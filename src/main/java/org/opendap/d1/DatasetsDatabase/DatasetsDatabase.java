@@ -27,6 +27,7 @@ import java.math.BigInteger;
 import java.net.URISyntaxException;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -249,7 +250,7 @@ public class DatasetsDatabase {
 	 */
 	protected void addDataset(String URL) throws SQLException, Exception {
 		c.setAutoCommit(false);
-		Statement stmt = c.createStatement();
+		PreparedStatement stmt = null;	// TODO use 3 PreparedStatments?
 	
 		try {
 			// Use this ISO601 time string for all three entries
@@ -259,8 +260,11 @@ public class DatasetsDatabase {
 			// First add the SDO info
 			String SDO = buildId(URL, SDO_IDENT, serialNumber);	// reuse
 			String SDOURL = buildDAPURL(URL, SDO_EXT);
-			String sql = "INSERT INTO SDO (Id, DAP_URL) VALUES ('" + SDO + "','" + SDOURL + "');";
-			stmt.executeUpdate(sql);
+			//String sql = "INSERT INTO SDO (Id, DAP_URL) VALUES ('" + SDO + "','" + SDOURL + "');";
+			stmt = c.prepareStatement("INSERT INTO SDO (Id, DAP_URL) VALUES (?,?);");
+			stmt.setString(1, SDO);
+			stmt.setString(2, SDOURL);
+			stmt.executeUpdate();
 			
 			CountingInputStream cis = getDAPURLContents(SDOURL);
 			Checksum checksum = ChecksumUtil.checksum(cis, "SHA-1");
@@ -272,8 +276,11 @@ public class DatasetsDatabase {
 			// Then add the SMO info
 			String SMO = buildId(URL, SMO_IDENT, serialNumber);	// reuse
 			String SMOURL = buildDAPURL(URL, SMO_EXT);
-			sql = "INSERT INTO SMO (Id, DAP_URL) VALUES ('" + SMO + "', '" + SMOURL + "');";
-			stmt.executeUpdate(sql);
+			//sql = "INSERT INTO SMO (Id, DAP_URL) VALUES ('" + SMO + "', '" + SMOURL + "');";
+			stmt = c.prepareStatement("INSERT INTO SMO (Id, DAP_URL) VALUES (?,?);");
+			stmt.setString(1, SMO);
+			stmt.setString(2, SMOURL);
+			stmt.executeUpdate();
 
 			cis = getDAPURLContents(SMOURL);
 			checksum = ChecksumUtil.checksum(cis, "SHA-1");
@@ -284,8 +291,12 @@ public class DatasetsDatabase {
 
 			// Then add the ORE info
 			String ORE = buildId(URL, ORE_IDENT, serialNumber);
-			sql = "INSERT INTO ORE (Id, SDO_Id, SMO_Id) VALUES ('" + ORE + "', '" + SDO + "', '" + SMO + "');";
-			stmt.executeUpdate(sql);
+			stmt = c.prepareStatement("INSERT INTO ORE (Id, SDO_Id, SMO_Id) VALUES (?, ?, ?);");
+			stmt.setString(1, ORE);
+			stmt.setString(2, SDO);
+			stmt.setString(3, SMO);
+			//sql = "INSERT INTO ORE (Id, SDO_Id, SMO_Id) VALUES ('" + ORE + "', '" + SDO + "', '" + SMO + "');";
+			stmt.executeUpdate();
 
 			cis = getOREDocContents(ORE, SMO, SDO);
 			checksum = ChecksumUtil.checksum(cis, "SHA-1");
@@ -318,6 +329,9 @@ public class DatasetsDatabase {
 	private void insertMetadata(Statement stmt, String now8601, Long serialNumber, String PID, String format, 
 			Checksum checksum, Long size) throws SQLException {
 		
+		// TODO use PreparedStatement
+		// FIXME SQL injection with PID, but currently not a threat since this is called only by
+		// a maintainer
 		String sql = "INSERT INTO Metadata (Id,dateAdded,serialNumber,format,size,checksum,algorithm) "
 				+ "VALUES ('" + PID + "','" + now8601 + "','" + serialNumber.toString() + "','" + format 
 				+ "','" + size.toString() + "','" + checksum.getValue() + "','" + checksum.getAlgorithm() + "');";
@@ -409,6 +423,7 @@ public class DatasetsDatabase {
 		int startOfPath = URL.indexOf('/'); // 'path' will include the '/' character
 		if (startOfPath < 0)
 			throw new Exception("Malformed URL (could not find path separator '/'.");
+		
 		String path = URL.substring(startOfPath);
 		String host = URL.substring(0, startOfPath);
 		
@@ -462,6 +477,7 @@ public class DatasetsDatabase {
 		Statement stmt = c.createStatement();
 		ResultSet rs = null;
 		try {
+			// FIXME SQL injection (where)
 			String sql = "SELECT COUNT(*) FROM Metadata " + where + " ORDER BY ROWID;";
 
 			int rows = 0;
@@ -551,14 +567,15 @@ public class DatasetsDatabase {
 	}
 	
 	private String getTextMetadataItem(String pid, String field) throws SQLException, DAPDatabaseException {
-		Statement stmt = c.createStatement();
+		PreparedStatement stmt = c.prepareStatement("SELECT " + field + " FROM Metadata WHERE Id = ?;");
+		stmt.setString(1, pid);
+
 		ResultSet rs = null;
 		String item = null;
 		try {
 			int count = 0;
 			
-			String sql = "SELECT " + field + " FROM Metadata WHERE Id = '" + pid + "';";
-			rs = stmt.executeQuery(sql);
+			rs = stmt.executeQuery();
 			while (rs.next()) {
 				count++;
 				item = rs.getString(field);
@@ -603,6 +620,7 @@ public class DatasetsDatabase {
 		ResultSet rs = null;
 		Vector<DatasetMetadata> dmv = new Vector<DatasetMetadata>();
 		try {
+			// FIXME The 'where' used here is vulnerable to SQL injection
 			String querySQL = "SELECT * FROM Metadata " + where + " ORDER BY ROWID;";
 			rs = stmt.executeQuery(querySQL);
 			int i = 0;
@@ -665,20 +683,25 @@ public class DatasetsDatabase {
 	 * if the PID does not actually reference a DAP URL.
 	 */
 	public String getDAPURL(String pid) throws SQLException, DAPDatabaseException {
-		Statement stmt = c.createStatement();
+		//Statement stmt = c.createStatement();
+		PreparedStatement stmt = null;
 		ResultSet rs = null;
 		try {
 			String URL = null;
 			int count = 0;
-			String sql = "SELECT SDO.DAP_URL FROM SDO WHERE SDO.Id = '" + pid + "';";
-			rs = stmt.executeQuery(sql);
+			//String sql = "SELECT SDO.DAP_URL FROM SDO WHERE SDO.Id = '" + pid + "';";
+			stmt = c.prepareStatement("SELECT SDO.DAP_URL FROM SDO WHERE SDO.Id = ?;");
+			stmt.setString(1, pid);
+			rs = stmt.executeQuery();
 			while (rs.next()) {
 				count++;
 				URL = rs.getString("DAP_URL");
 			}
 
-			sql = "SELECT SMO.DAP_URL FROM SMO WHERE SMO.Id = '" + pid + "';";
-			rs = stmt.executeQuery(sql);
+			//sql = "SELECT SMO.DAP_URL FROM SMO WHERE SMO.Id = '" + pid + "';";
+			stmt = c.prepareStatement("SELECT SMO.DAP_URL FROM SMO WHERE SMO.Id = ?;");
+			stmt.setString(1, pid);
+			rs = stmt.executeQuery();
 			while (rs.next()) {
 				count++;
 				URL = rs.getString("DAP_URL");
@@ -698,8 +721,10 @@ public class DatasetsDatabase {
 			log.error("Corrupt database (" + dbName + "): " + e.getMessage());
 			throw e;
 		} finally {
-			rs.close();
-			stmt.close();
+			if (rs != null)
+				rs.close();
+			if (stmt != null)
+				stmt.close();
 		}
 	}
 	
@@ -716,12 +741,15 @@ public class DatasetsDatabase {
 	 * @throws DAPDatabaseException
 	 */
 	public List<String> getIdentifiersForORE(String pid) throws SQLException, DAPDatabaseException {
-		Statement stmt = c.createStatement();
+		// Statement stmt = c.createStatement();
+		PreparedStatement stmt = null;
 		ResultSet rs = null;
 		try {
 			Vector<String> ids = new Vector<String>();
-			String sql = "SELECT ORE.SDO_Id, ORE.SMO_Id FROM ORE WHERE ORE.Id = '" + pid + "';";
-			rs = stmt.executeQuery(sql);
+			//String sql = "SELECT ORE.SDO_Id, ORE.SMO_Id FROM ORE WHERE ORE.Id = '" + pid + "';";
+			stmt = c.prepareStatement("SELECT ORE.SDO_Id, ORE.SMO_Id FROM ORE WHERE ORE.Id = ?;");
+			stmt.setString(1, pid);
+			rs = stmt.executeQuery();
 			while (rs.next()) {
 				ids.add(rs.getString("SMO_Id"));
 				ids.add(rs.getString("SDO_Id"));
@@ -742,8 +770,10 @@ public class DatasetsDatabase {
 			log.error("Corrupt database (" + dbName + "): " + e.getMessage());
 			throw e;
 		} finally {
-			rs.close();
-			stmt.close();
+			if (rs != null)
+				rs.close();
+			if (stmt != null)
+				stmt.close();
 		}
 	}
 
