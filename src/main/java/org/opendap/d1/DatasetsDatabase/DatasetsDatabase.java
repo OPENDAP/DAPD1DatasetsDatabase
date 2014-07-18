@@ -483,7 +483,7 @@ public class DatasetsDatabase {
 			int rows = 0;
 			rs = stmt.executeQuery(sql);
 			while (rs.next()) {
-				rows = rs.getInt("COUNT(*)");
+				rows = rs.getInt(1);
 			}
 
 			return rows;
