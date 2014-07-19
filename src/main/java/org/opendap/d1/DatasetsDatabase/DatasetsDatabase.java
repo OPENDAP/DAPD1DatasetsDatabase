@@ -184,10 +184,50 @@ public class DatasetsDatabase {
 		log.debug("Made database tables successfully (" + dbName + ").");
 	}
 	
+	/**
+	 * Is this database valid. This is a copy of the same code in LogDatabase over in d1Servlet.
+	 * 
+	 * I could factor this out and make the tableNames and Connection object parameters...
+	 * 
+	 * @return
+	 * @throws SQLException
+	 */
 	public boolean isValid() throws SQLException {
-		final Set<String> tableNames 
-			= new HashSet<String>(Arrays.asList("Metadata", "ORE", "SMO", "SDO"));
+		final Set<String> tableNames = new HashSet<String>(Arrays.asList("Metadata", "ORE", "SMO", "SDO"));
 		
+		PreparedStatement stmt = null; //c.createStatement();
+		ResultSet rs = null;
+		try {
+			//String sql = "SELECT name FROM sqlite_master WHERE type='table';";
+			stmt = c.prepareStatement("SELECT name FROM sqlite_master WHERE type='table';");
+			rs = stmt.executeQuery();
+			int count = 0;
+			while (rs.next()) {
+				count++;
+				String name = rs.getString("name");
+				if (!tableNames.contains(name)) {
+					log.debug("Database failed validity test; does not have table: {}", name);
+					return false;
+				}
+			}
+			if (count != tableNames.size()) {
+				log.debug("Database failed validity test; does not have the required tables.");
+				return false;
+			}
+			
+			// All tests passed
+			return true;
+		} catch (SQLException e) {
+			log.error("Error querying the log database ({}).", dbName);
+			throw e;
+		}
+		finally {
+			if (rs != null)
+				rs.close();
+			if (stmt != null)
+				stmt.close();
+		}		
+		/*
 		Statement stmt = c.createStatement();
 		String sql = "SELECT name FROM sqlite_master WHERE type='table';";
 		ResultSet rs = null;
@@ -216,7 +256,8 @@ public class DatasetsDatabase {
 		finally {
 			rs.close();
 			stmt.close();
-		}		
+		}
+		*/		
 	}
 	
 	/**
@@ -232,10 +273,10 @@ public class DatasetsDatabase {
 		try {
 			return getTextMetadataItem(pid, "Id") != null;
 		} catch (SQLException e) {
-			log.error("Error querying the database (" + dbName + ") for PID: " + pid + ".");
+			log.error("Error querying the database ({}) for PID: {}.", dbName, pid);
 			return false;
 		} catch (DAPDatabaseException e) {
-			log.error("Error querying the database (" + dbName + ") for PID: " + pid + ".");
+			log.error("Error querying the database ({}) for PID: {}.", dbName, pid);
 			return false;
 		}
 	}
@@ -251,7 +292,8 @@ public class DatasetsDatabase {
 	protected void addDataset(String URL) throws SQLException, Exception {
 		c.setAutoCommit(false);
 		PreparedStatement stmt = null;	// TODO use 3 PreparedStatments?
-	
+		PreparedStatement m_stmt = c.prepareStatement("INSERT INTO Metadata (Id,dateAdded,serialNumber,format,size,checksum,algorithm) VALUES (?, ?, ?, ?, ?, ?, ?);");
+
 		try {
 			// Use this ISO601 time string for all three entries
 			String now8601 = DAPD1DateParser.DateToString(new Date());
@@ -271,7 +313,7 @@ public class DatasetsDatabase {
 			Long size = new Long(cis.getByteCount());
 			cis.close();
 			
-			insertMetadata(stmt, now8601, serialNumber, SDO, SDO_FORMAT, checksum, size);
+			insertMetadata(m_stmt, now8601, serialNumber, SDO, SDO_FORMAT, checksum, size);
 
 			// Then add the SMO info
 			String SMO = buildId(URL, SMO_IDENT, serialNumber);	// reuse
@@ -287,7 +329,7 @@ public class DatasetsDatabase {
 			size = new Long(cis.getByteCount());
 			cis.close();
 			
-			insertMetadata(stmt, now8601, serialNumber, SMO, SMO_FORMAT, checksum, size);
+			insertMetadata(m_stmt, now8601, serialNumber, SMO, SMO_FORMAT, checksum, size);
 
 			// Then add the ORE info
 			String ORE = buildId(URL, ORE_IDENT, serialNumber);
@@ -303,10 +345,10 @@ public class DatasetsDatabase {
 			size = new Long(cis.getByteCount());
 			cis.close();
 			
-			insertMetadata(stmt, now8601, serialNumber, ORE, ORE_FORMAT, checksum, size);
+			insertMetadata(m_stmt, now8601, serialNumber, ORE, ORE_FORMAT, checksum, size);
 
 		} catch (SQLException e) {
-			log.error("Failed to load values into new database tables (" + dbName + ").");
+			log.error("Failed to load values into new database tables ({}).", dbName);
 			throw e;
 		} finally {
 			stmt.close();
@@ -317,7 +359,6 @@ public class DatasetsDatabase {
 	/**
 	 * Convenience method to set columns in the creatively-named 'Metadata' table.
 	 * 
-	 * @param stmt
 	 * @param now8601
 	 * @param servialNumber
 	 * @param PID
@@ -326,17 +367,20 @@ public class DatasetsDatabase {
 	 * @param size
 	 * @throws SQLException
 	 */
-	private void insertMetadata(Statement stmt, String now8601, Long serialNumber, String PID, String format, 
-			Checksum checksum, Long size) throws SQLException {
-		
-		// TODO use PreparedStatement
-		// FIXME SQL injection with PID, but currently not a threat since this is called only by
-		// a maintainer
-		String sql = "INSERT INTO Metadata (Id,dateAdded,serialNumber,format,size,checksum,algorithm) "
-				+ "VALUES ('" + PID + "','" + now8601 + "','" + serialNumber.toString() + "','" + format 
-				+ "','" + size.toString() + "','" + checksum.getValue() + "','" + checksum.getAlgorithm() + "');";
-		log.debug("SQL Statement: " + sql);
-		stmt.executeUpdate(sql);
+	private void insertMetadata(PreparedStatement stmt, String now8601,
+			Long serialNumber, String PID, String format, Checksum checksum,
+			Long size) throws SQLException {
+		// prepareStatement("INSERT INTO Metadata (Id,dateAdded,serialNumber,format,size,checksum,algorithm) VALUES (?, ?, ?, ?, ?, ?, ?);");
+
+		stmt.setString(1, PID);
+		stmt.setString(2, now8601);
+		stmt.setString(3, serialNumber.toString());
+		stmt.setString(4, format);
+		stmt.setString(5, size.toString());
+		stmt.setString(6, checksum.getValue());
+		stmt.setString(7, checksum.getAlgorithm());
+
+		stmt.executeUpdate();
 	}
 	
 	/**
