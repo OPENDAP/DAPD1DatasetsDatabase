@@ -228,37 +228,6 @@ public class DatasetsDatabase {
 			if (stmt != null)
 				stmt.close();
 		}		
-		/*
-		Statement stmt = c.createStatement();
-		String sql = "SELECT name FROM sqlite_master WHERE type='table';";
-		ResultSet rs = null;
-		try {
-			rs = stmt.executeQuery(sql);
-			int count = 0;
-			while (rs.next()) {
-				count++;
-				String name = rs.getString("name");
-				if (!tableNames.contains(name)) {
-					log.error("Database failed validity test; does not have table: " + name);
-					return false;
-				}
-			}
-			if (count != tableNames.size()) {
-				log.error("Database failed validity test; does not have the required tables.");
-				return false;
-			}
-			
-			// All tests passed
-			return true;
-		} catch (SQLException e) {
-			log.error("Error querying the database (" + dbName + ").");
-			throw e;
-		}
-		finally {
-			rs.close();
-			stmt.close();
-		}
-		*/		
 	}
 	
 	/**
