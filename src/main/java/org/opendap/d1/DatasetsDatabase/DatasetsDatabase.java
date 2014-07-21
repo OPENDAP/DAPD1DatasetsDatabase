@@ -526,11 +526,11 @@ public class DatasetsDatabase {
 			baseSQL += " where";
 			String and = "";
 			if (fromDate != null) {
-				baseSQL += " dateLogged >= ?";
+				baseSQL += " dateAdded >= ?";
 				and = " and";
 			}
 			if (toDate != null) {
-				baseSQL += and + " dateLogged < ?";
+				baseSQL += and + " dateAdded < ?";
 				and = " and";
 			}
 			if (format != null) {
