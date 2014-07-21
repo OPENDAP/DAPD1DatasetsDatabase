@@ -117,7 +117,7 @@ public class EditDatasets {
 		    }
 		    
 		    if (verbose) {
-		    	ps.println("Rows in the database: " + db.count(""));
+		    	ps.println("Rows in the database: " + db.count(null, null, null));
 		    	db.dump();
 		    }
 		}

@@ -50,6 +50,7 @@ import org.apache.http.impl.client.DefaultHttpClient;
 import org.dataone.ore.ResourceMapFactory;
 import org.dataone.service.types.v1.Checksum;
 import org.dataone.service.types.v1.Identifier;
+import org.dataone.service.types.v1.ObjectFormatIdentifier;
 import org.dataone.service.types.v1.util.ChecksumUtil;
 import org.dspace.foresite.OREException;
 import org.dspace.foresite.ORESerialiserException;
@@ -511,21 +512,75 @@ public class DatasetsDatabase {
 	}
 	
 	/**
+	 * Build the text of a where clause that can be passed to prepareStatement and then
+	 * populated with values using populateMetadataWhereClause().
+	 * @param baseSQL
+	 * @param fromDate
+	 * @param toDate
+	 * @param format
+	 * @param suffix
+	 * @return
+	 */
+	private String buildMetadataWhereClause(String baseSQL, Date fromDate, Date toDate, ObjectFormatIdentifier format, String suffix) {
+		if (fromDate != null || toDate != null || format != null) {
+			baseSQL += " where";
+			String and = "";
+			if (fromDate != null) {
+				baseSQL += " dateLogged >= ?";
+				and = " and";
+			}
+			if (toDate != null) {
+				baseSQL += and + " dateLogged < ?";
+				and = " and";
+			}
+			if (format != null) {
+				baseSQL += and + " format = ?";
+			}
+		}
+		
+		return baseSQL + suffix;
+	}
+	
+	/**
+	 * This depends on the PreparedStatement being built using buildMetadataWhereClause().
+	 * @param fromDate
+	 * @param toDate
+	 * @param format
+	 * @param stmt
+	 * @throws SQLException
+	 */
+	private void populateMetadataWhereClause(Date fromDate, Date toDate, ObjectFormatIdentifier format, PreparedStatement stmt)
+			throws SQLException {
+		int position = 1; // SQL uses ones-indexing
+		if (fromDate != null)
+			stmt.setString(position++, DAPD1DateParser.DateToString(fromDate));
+		if (toDate != null)
+			stmt.setString(position++, DAPD1DateParser.DateToString(toDate));
+		if (format != null)
+			stmt.setString(position, format.getValue());
+	}
+
+
+	/**
 	 * How many PIDs are in the database for the DAP D1 servlet. This includes
 	 * PIDs that are obsolete (when support for those has been added to the database).
 	 *
 	 * @return The count of Unique PIDs.
 	 * @throws SQLException
 	 */
-	public int count(String where) throws SQLException {
-		Statement stmt = c.createStatement();
+	public int count(Date fromDate, Date toDate, ObjectFormatIdentifier format) throws SQLException {
+		PreparedStatement stmt = null;
 		ResultSet rs = null;
 		try {
-			// FIXME SQL injection (where)
-			String sql = "SELECT COUNT(*) FROM Metadata " + where + " ORDER BY ROWID;";
-
+			String sql = buildMetadataWhereClause("SELECT COUNT(*) FROM Metadata", fromDate, toDate, format, ";");
+			log.debug("Metadata count stmt: {}", sql);
+			stmt = c.prepareStatement(sql);
+			
+			populateMetadataWhereClause(fromDate, toDate, format, stmt);
+			
+			rs = stmt.executeQuery();
+			
 			int rows = 0;
-			rs = stmt.executeQuery(sql);
 			while (rs.next()) {
 				rows = rs.getInt(1);
 			}
@@ -536,8 +591,10 @@ public class DatasetsDatabase {
 			log.error("Failed to count the Metadata table (" + dbName + "): " + e.getMessage());
 			throw e;
 		} finally {
-			rs.close();
-			stmt.close();
+			if (rs != null)
+				rs.close();
+			if (stmt != null)
+				stmt.close();
 		}
 	}
 	
@@ -659,22 +716,25 @@ public class DatasetsDatabase {
 	 * @throws SQLException
 	 * @throws DAPDatabaseException
 	 */
-	public List<DatasetMetadata> getAllMetadata(String where, int start, int count) throws SQLException, DAPDatabaseException {
-		Statement stmt = c.createStatement();
+	public List<DatasetMetadata> getAllMetadata(Date fromDate, Date toDate, ObjectFormatIdentifier format,
+			int start, int count) throws SQLException, DAPDatabaseException {
+		PreparedStatement stmt = null;
 		ResultSet rs = null;
 		Vector<DatasetMetadata> dmv = new Vector<DatasetMetadata>();
 		try {
-			// FIXME The 'where' used here is vulnerable to SQL injection
-			String querySQL = "SELECT * FROM Metadata " + where + " ORDER BY ROWID;";
-			rs = stmt.executeQuery(querySQL);
-			int i = 0;
-			while (rs.next()) {
-				// Could use a paged query for this
-				++i;
-				if (i <= start)
-					continue;
-				if (i > start + count)
-					break;
+			String sql = buildMetadataWhereClause("SELECT * FROM Metadata", fromDate, toDate, format, " ORDER BY ROWID;");
+			log.debug("Metadata access stmt: {}", sql);
+			stmt = c.prepareStatement(sql);
+			
+			populateMetadataWhereClause(fromDate, toDate, format, stmt);
+			
+			rs = stmt.executeQuery();
+
+			while (start-- > 0 && rs.next());
+
+			int lines = 0;
+			while (lines < count && rs.next()) {
+				++lines;
 				dmv.add(new DatasetMetadata(rs.getString("Id"), rs.getString("format"), rs.getString("checksum"),
 						rs.getString("algorithm"), rs.getString("size"), rs.getString("dateAdded")));
 			}
@@ -687,8 +747,10 @@ public class DatasetsDatabase {
 			log.error("Corrupt database (" + dbName + "). Could not parse a Date/Time value: " + e.getMessage());
 			throw new DAPDatabaseException(e.getMessage());
 		} finally {
-			rs.close();
-			stmt.close();
+			if (rs != null)
+				rs.close();
+			if (stmt != null)
+				stmt.close();
 		}
 	}
 	
