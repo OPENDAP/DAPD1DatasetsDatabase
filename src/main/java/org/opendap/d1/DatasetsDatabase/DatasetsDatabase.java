@@ -85,7 +85,7 @@ public class DatasetsDatabase {
 	/// DAP URL extension for a SMO
 	public static String SMO_EXT = ".iso";
 	/// SMO D1 formatID
-	public static String SMO_FORMAT = "iso19115";
+	public static String SMO_FORMAT = "INCITS 453-2009";	// ISO 19115 North America
 	
 	/// D1 ORE
 	public static String ORE_IDENT = "ore";
