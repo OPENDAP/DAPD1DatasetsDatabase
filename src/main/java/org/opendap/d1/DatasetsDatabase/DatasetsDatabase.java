@@ -313,6 +313,7 @@ public class DatasetsDatabase {
 			cis = getOREDocContents(ORE, SMO, SDO);
 			checksum = ChecksumUtil.checksum(cis, "SHA-1");
 			size = new Long(cis.getByteCount());
+			log.debug("ORE Doc size from CIS: {}", size);
 			cis.close();
 			
 			insertMetadata(m_stmt, now8601, serialNumber, ORE, ORE_FORMAT, checksum, size);
@@ -404,6 +405,8 @@ public class DatasetsDatabase {
 		
 		ResourceMap rm = ResourceMapFactory.getInstance().createResourceMap(oreId, idMap);
 		String resourceMapXML = ResourceMapFactory.getInstance().serializeResourceMap(rm);
+		log.debug("ORE Doc from string: $${}$$", resourceMapXML);
+		log.debug("ORE Doc size from string: {}", resourceMapXML.length());
 		return new CountingInputStream(new ByteArrayInputStream(resourceMapXML.getBytes()));
 	}
 		

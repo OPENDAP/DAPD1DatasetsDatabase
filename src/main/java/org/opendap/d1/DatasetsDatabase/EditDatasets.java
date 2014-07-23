@@ -33,8 +33,6 @@ import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Options;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-//import ch.qos.logback.classic.LoggerContext;
-//import ch.qos.logback.core.util.StatusPrinter;
 
 /**
  * @brief Create, Read, Update, Delete tool for the DAP/D1 servlet's database
@@ -54,8 +52,27 @@ public class EditDatasets {
 	 * @param args
 	 */
 	public static void main(String[] args) {
-
-	    final CommandLineParser parser = new GnuParser();
+		/*
+		Reader r = new InputStreamReader(EditDatasets.class.getClassLoader().getResourceAsStream("logback.xml"));
+		StringWriter sw = new StringWriter();
+		char[] buffer = new char[1024];
+		try {
+			for (int n; (n = r.read(buffer)) != -1; )
+			    sw.write(buffer, 0, n);
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		String str = sw.toString();
+		System.out.println(str);
+		*/
+		/*
+	    // assume SLF4J is bound to logback in the current environment
+	    LoggerContext lc = (LoggerContext) LoggerFactory.getILoggerFactory();
+	    // print logback's internal status
+	    StatusPrinter.print(lc);
+		 */
+		final CommandLineParser parser = new GnuParser();
 
 		Options options = new Options();
 
