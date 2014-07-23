@@ -31,6 +31,10 @@ import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.GnuParser;
 import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Options;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+//import ch.qos.logback.classic.LoggerContext;
+//import ch.qos.logback.core.util.StatusPrinter;
 
 /**
  * @brief Create, Read, Update, Delete tool for the DAP/D1 servlet's database
@@ -43,6 +47,8 @@ import org.apache.commons.cli.Options;
  *
  */
 public class EditDatasets {
+	
+	private static Logger log = LoggerFactory.getLogger(EditDatasets.class);
 	
 	/**
 	 * @param args
@@ -57,6 +63,8 @@ public class EditDatasets {
 		options.addOption("i", "initialize", false, "Create tables for a blank database");
 		options.addOption("r", "read", true, "Read dataset URLs from a file, else read URLs from the command line");
 		options.addOption("h", "help", false, "Usage information");
+		
+		log.debug("Starting debug logging");
 		
 		try {
 		    CommandLine line = parser.parse( options, args );
