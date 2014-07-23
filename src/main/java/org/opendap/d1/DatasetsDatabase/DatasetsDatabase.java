@@ -162,7 +162,8 @@ public class DatasetsDatabase {
 			sql = "CREATE TABLE ORE "
 					+ "(Id		TEXT NOT NULL," // FOREIGN KEY
 					+ " SMO_Id 	TEXT NOT NULL,"
-					+ " SDO_Id 	TEXT NOT NULL)";
+					+ " SDO_Id 	TEXT NOT NULL,"
+					+ " ORE_Doc	BLOB NOT NULL)";
 			stmt.executeUpdate(sql);
 			
 			sql = "CREATE TABLE SDO "
@@ -270,9 +271,9 @@ public class DatasetsDatabase {
 			Long serialNumber = new Long(1);	// when calling, dataset is always new
 			
 			// First add the SDO info
-			String SDO = buildId(URL, SDO_IDENT, serialNumber);	// reuse
+			String SDO = buildId(URL, SDO_IDENT, serialNumber);	// reuse SDO
 			String SDOURL = buildDAPURL(URL, SDO_EXT);
-			//String sql = "INSERT INTO SDO (Id, DAP_URL) VALUES ('" + SDO + "','" + SDOURL + "');";
+
 			stmt = c.prepareStatement("INSERT INTO SDO (Id, DAP_URL) VALUES (?,?);");
 			stmt.setString(1, SDO);
 			stmt.setString(2, SDOURL);
@@ -286,9 +287,9 @@ public class DatasetsDatabase {
 			insertMetadata(m_stmt, now8601, serialNumber, SDO, SDO_FORMAT, checksum, size);
 
 			// Then add the SMO info
-			String SMO = buildId(URL, SMO_IDENT, serialNumber);	// reuse
+			String SMO = buildId(URL, SMO_IDENT, serialNumber);
 			String SMOURL = buildDAPURL(URL, SMO_EXT);
-			//sql = "INSERT INTO SMO (Id, DAP_URL) VALUES ('" + SMO + "', '" + SMOURL + "');";
+
 			stmt = c.prepareStatement("INSERT INTO SMO (Id, DAP_URL) VALUES (?,?);");
 			stmt.setString(1, SMO);
 			stmt.setString(2, SMOURL);
@@ -303,18 +304,19 @@ public class DatasetsDatabase {
 
 			// Then add the ORE info
 			String ORE = buildId(URL, ORE_IDENT, serialNumber);
-			stmt = c.prepareStatement("INSERT INTO ORE (Id, SDO_Id, SMO_Id) VALUES (?, ?, ?);");
+
+			String resourceMapXML = getOREDocContents(ORE, SMO, SDO);
+			cis = new CountingInputStream(new ByteArrayInputStream(resourceMapXML.getBytes()));
+			checksum = ChecksumUtil.checksum(cis, "SHA-1");
+			size = new Long(cis.getByteCount());
+			cis.close();
+			
+			stmt = c.prepareStatement("INSERT INTO ORE (Id, SDO_Id, SMO_Id, ORE_Doc) VALUES (?, ?, ?, ?);");
 			stmt.setString(1, ORE);
 			stmt.setString(2, SDO);
 			stmt.setString(3, SMO);
-			//sql = "INSERT INTO ORE (Id, SDO_Id, SMO_Id) VALUES ('" + ORE + "', '" + SDO + "', '" + SMO + "');";
+			stmt.setBytes(4, resourceMapXML.getBytes());
 			stmt.executeUpdate();
-
-			cis = getOREDocContents(ORE, SMO, SDO);
-			checksum = ChecksumUtil.checksum(cis, "SHA-1");
-			size = new Long(cis.getByteCount());
-			log.debug("ORE Doc size from CIS: {}", size);
-			cis.close();
 			
 			insertMetadata(m_stmt, now8601, serialNumber, ORE, ORE_FORMAT, checksum, size);
 
@@ -387,7 +389,7 @@ public class DatasetsDatabase {
 	 * @throws URISyntaxException
 	 * @throws ORESerialiserException
 	 */
-	private CountingInputStream getOREDocContents(String ORE, String SMO, String SDO) 
+	private String getOREDocContents(String ORE, String SMO, String SDO) 
 			throws OREException, URISyntaxException, ORESerialiserException {
 		Identifier smoId = new Identifier();
 		smoId.setValue(SMO);
@@ -405,9 +407,7 @@ public class DatasetsDatabase {
 		
 		ResourceMap rm = ResourceMapFactory.getInstance().createResourceMap(oreId, idMap);
 		String resourceMapXML = ResourceMapFactory.getInstance().serializeResourceMap(rm);
-		log.debug("ORE Doc from string: $${}$$", resourceMapXML);
-		log.debug("ORE Doc size from string: {}", resourceMapXML.length());
-		return new CountingInputStream(new ByteArrayInputStream(resourceMapXML.getBytes()));
+		return resourceMapXML;
 	}
 		
 	/**
@@ -767,7 +767,6 @@ public class DatasetsDatabase {
 		try {
 			String URL = null;
 			int count = 0;
-			//String sql = "SELECT SDO.DAP_URL FROM SDO WHERE SDO.Id = '" + pid + "';";
 			stmt = c.prepareStatement("SELECT SDO.DAP_URL FROM SDO WHERE SDO.Id = ?;");
 			stmt.setString(1, pid);
 			rs = stmt.executeQuery();
@@ -776,7 +775,6 @@ public class DatasetsDatabase {
 				URL = rs.getString("DAP_URL");
 			}
 
-			//sql = "SELECT SMO.DAP_URL FROM SMO WHERE SMO.Id = '" + pid + "';";
 			stmt = c.prepareStatement("SELECT SMO.DAP_URL FROM SMO WHERE SMO.Id = ?;");
 			stmt.setString(1, pid);
 			rs = stmt.executeQuery();
@@ -813,6 +811,8 @@ public class DatasetsDatabase {
 	 * the current version, anything other than a single pair of DAP D1 PIDs is
 	 * an error.
 	 * 
+	 * @deprecated Use getOREDoc() instead
+	 * 
 	 * @param pid The ORE Identifier
 	 * @return
 	 * @throws SQLException
@@ -846,6 +846,46 @@ public class DatasetsDatabase {
 			}
 		} catch (SQLException e) {
 			log.error("Corrupt database (" + dbName + "): " + e.getMessage());
+			throw e;
+		} finally {
+			if (rs != null)
+				rs.close();
+			if (stmt != null)
+				stmt.close();
+		}
+	}
+
+	/**
+	 * I added ORE Documents to the server's database because it seems that generated
+	 * ORE documents have a timestamp that is set to the time they were generated, so
+	 * virtually no two ORE docs are equal - they yield different checksums.
+	 * 
+	 * The SDO and SMO PIDs are still stored in the DB, however, so it's still possible
+	 * to call getIdentifiersForORE().
+	 * 
+	 * @param pid
+	 * @return
+	 * @throws SQLException
+	 * @throws DAPDatabaseException
+	 */
+	public String getOREDoc(String pid) throws SQLException, DAPDatabaseException {
+		PreparedStatement stmt = null;
+		ResultSet rs = null;
+		try {
+			String ore_doc = null;
+			stmt = c.prepareStatement("SELECT ORE.ORE_Doc FROM ORE WHERE ORE.Id = ?;");
+			stmt.setString(1, pid);
+			rs = stmt.executeQuery();
+			while (rs.next()) {
+				ore_doc = rs.getString("ORE_Doc");
+			}
+			
+			if (ore_doc == null)
+				throw new DAPDatabaseException("Did not find the ORE document for '" + pid + "'.");
+
+			return ore_doc;
+		} catch (SQLException e) {
+			log.error("Corrupt database ({}): {}", dbName, e.getMessage());
 			throw e;
 		} finally {
 			if (rs != null)
