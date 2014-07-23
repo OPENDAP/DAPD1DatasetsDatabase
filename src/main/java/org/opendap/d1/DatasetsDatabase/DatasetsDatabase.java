@@ -305,7 +305,7 @@ public class DatasetsDatabase {
 			// Then add the ORE info
 			String ORE = buildId(URL, ORE_IDENT, serialNumber);
 
-			String resourceMapXML = getOREDocContents(ORE, SMO, SDO);
+			String resourceMapXML = getOREDoc(ORE, SMO, SDO);
 			cis = new CountingInputStream(new ByteArrayInputStream(resourceMapXML.getBytes()));
 			checksum = ChecksumUtil.checksum(cis, "SHA-1");
 			size = new Long(cis.getByteCount());
@@ -377,9 +377,7 @@ public class DatasetsDatabase {
 	}
 		
 	/**
-	 * Instead of reading the ORE doc - because they are built on-the-fly - make
-	 * it and return a CountingInputStream that can be used to both compute the
-	 * checksum and count the bytes.
+	 * Build the ORE document using the SDO and SMO PIDs
 	 * 
 	 * @param ORE A String that holds the D1 PID for the ORE document 
 	 * @param SMO A String that holds the D1 PID for the SMO document
@@ -389,7 +387,7 @@ public class DatasetsDatabase {
 	 * @throws URISyntaxException
 	 * @throws ORESerialiserException
 	 */
-	private String getOREDocContents(String ORE, String SMO, String SDO) 
+	private String getOREDoc(String ORE, String SMO, String SDO) 
 			throws OREException, URISyntaxException, ORESerialiserException {
 		Identifier smoId = new Identifier();
 		smoId.setValue(SMO);
