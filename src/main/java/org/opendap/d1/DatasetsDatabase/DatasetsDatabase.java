@@ -329,6 +329,75 @@ public class DatasetsDatabase {
 		}
 	}
 
+	protected void updateDataset(String URL) throws SQLException, Exception {
+		c.setAutoCommit(false);
+		PreparedStatement stmt = null;	// TODO use 3 PreparedStatments?
+		PreparedStatement m_stmt = c.prepareStatement("INSERT INTO Metadata (Id,dateAdded,serialNumber,format,size,checksum,algorithm) VALUES (?, ?, ?, ?, ?, ?, ?);");
+
+		try {
+			// Use this ISO601 time string for all three entries
+			String now8601 = DAPD1DateParser.DateToString(new Date());
+			Long serialNumber = new Long(1);	// when calling, dataset is always new
+			
+			// First add the SDO info
+			String SDO = buildId(URL, SDO_IDENT, serialNumber);	// reuse SDO
+			String SDOURL = buildDAPURL(URL, SDO_EXT);
+
+			stmt = c.prepareStatement("INSERT INTO SDO (Id, DAP_URL) VALUES (?,?);");
+			stmt.setString(1, SDO);
+			stmt.setString(2, SDOURL);
+			stmt.executeUpdate();
+			
+			CountingInputStream cis = getDAPURLContents(SDOURL);
+			Checksum checksum = ChecksumUtil.checksum(cis, "SHA-1");
+			Long size = new Long(cis.getByteCount());
+			cis.close();
+			
+			insertMetadata(m_stmt, now8601, serialNumber, SDO, SDO_FORMAT, checksum, size);
+
+			// Then add the SMO info
+			String SMO = buildId(URL, SMO_IDENT, serialNumber);
+			String SMOURL = buildDAPURL(URL, SMO_EXT);
+
+			stmt = c.prepareStatement("INSERT INTO SMO (Id, DAP_URL) VALUES (?,?);");
+			stmt.setString(1, SMO);
+			stmt.setString(2, SMOURL);
+			stmt.executeUpdate();
+
+			cis = getDAPURLContents(SMOURL);
+			checksum = ChecksumUtil.checksum(cis, "SHA-1");
+			size = new Long(cis.getByteCount());
+			cis.close();
+			
+			insertMetadata(m_stmt, now8601, serialNumber, SMO, SMO_FORMAT, checksum, size);
+
+			// Then add the ORE info
+			String ORE = buildId(URL, ORE_IDENT, serialNumber);
+
+			String resourceMapXML = getOREDoc(ORE, SMO, SDO);
+			cis = new CountingInputStream(new ByteArrayInputStream(resourceMapXML.getBytes()));
+			checksum = ChecksumUtil.checksum(cis, "SHA-1");
+			size = new Long(cis.getByteCount());
+			cis.close();
+			
+			stmt = c.prepareStatement("INSERT INTO ORE (Id, SDO_Id, SMO_Id, ORE_Doc) VALUES (?, ?, ?, ?);");
+			stmt.setString(1, ORE);
+			stmt.setString(2, SDO);
+			stmt.setString(3, SMO);
+			stmt.setBytes(4, resourceMapXML.getBytes());
+			stmt.executeUpdate();
+			
+			insertMetadata(m_stmt, now8601, serialNumber, ORE, ORE_FORMAT, checksum, size);
+
+		} catch (SQLException e) {
+			log.error("Failed to load values into new database tables ({}).", dbName);
+			throw e;
+		} finally {
+			stmt.close();
+			c.commit();
+		}
+	}
+
 	/**
 	 * Convenience method to set columns in the creatively-named 'Metadata' table.
 	 * 

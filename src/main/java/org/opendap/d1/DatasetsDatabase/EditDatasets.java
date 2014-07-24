@@ -79,6 +79,11 @@ public class EditDatasets {
 		options.addOption("v", "verbose", false, "Write info to stdout");
 		options.addOption("i", "initialize", false, "Create tables for a blank database");
 		options.addOption("r", "read", true, "Read dataset URLs from a file, else read URLs from the command line");
+		
+		options.addOption("u", "update", true, "If this URL, or any URL in the file of URLs, already is in the DB, update it's metadata");
+		options.addOption("o", "obsoleted", true, "Used with -u, this URL is obsoleted by the other URL (-u U_new -o U_obsoleted");
+		
+		options.addOption("w", "warn", true, "If there are errors because a URL is already in the DB, make them errors and keep going");
 		options.addOption("h", "help", false, "Usage information");
 		
 		log.debug("Starting debug logging");
