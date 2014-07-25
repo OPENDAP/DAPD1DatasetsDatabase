@@ -48,6 +48,8 @@ public class EditDatasets {
 	
 	private static Logger log = LoggerFactory.getLogger(EditDatasets.class);
 	
+	//private static boolean warnings = false;
+	
 	/**
 	 * @param args
 	 */
@@ -78,12 +80,15 @@ public class EditDatasets {
 
 		options.addOption("v", "verbose", false, "Write info to stdout");
 		options.addOption("i", "initialize", false, "Create tables for a blank database");
+		
 		options.addOption("r", "read", true, "Read dataset URLs from a file, else read URLs from the command line");
 		
-		options.addOption("u", "update", true, "If this URL, or any URL in the file of URLs, already is in the DB, update it's metadata");
-		options.addOption("o", "obsoleted", true, "Used with -u, this URL is obsoleted by the other URL (-u U_new -o U_obsoleted");
+		options.addOption("a", "add", true, "Add the dataset(s) either from the command line or a file");
 		
-		options.addOption("w", "warn", true, "If there are errors because a URL is already in the DB, make them errors and keep going");
+		options.addOption("u", "update", true, "If this URL, or any URL in the file of URLs, already is in the DB, update it's metadata");
+		options.addOption("o", "obsoletes", true, "Used with -u, this URL is obsoleted by the other URL (-u U_new -o U_obsoleted");
+		
+		// options.addOption("w", "warn", true, "If there are errors because a URL is already in the DB, make them errors and keep going");
 		options.addOption("h", "help", false, "Usage information");
 		
 		log.debug("Starting debug logging");
@@ -100,13 +105,17 @@ public class EditDatasets {
 		    boolean verbose = line.hasOption("v");
 		    PrintStream ps = System.out;
 		    
+		    //boolean warnings = line.hasOption("w");
+		    
 		    String remainingArgs[] = line.getArgs();
-		    if (remainingArgs.length < 1)
-		    	throw new Exception("Expected the database name.");
+		    if (remainingArgs.length < 1) {
+		    	System.err.println("Expected the database name.");
+		    	return;
+		    }
 		    
 		    String dbName = remainingArgs[0];
 		    if (verbose) {
-		    	ps.println("Databae Name: " + dbName);
+		    	ps.println("Database Name: " + dbName);
 		    }
 		    
 		    DatasetsDatabase db = new DatasetsDatabase(dbName);
@@ -121,29 +130,71 @@ public class EditDatasets {
 		    	ps.println("Database opened but is not valid.");
 		    	return;
 		    }
-		    	
-		    if (line.hasOption("r")) {
-		    	// Open the file
-		    	FileInputStream fstream = new FileInputStream(line.getOptionValue("r"));
-		    	BufferedReader br = new BufferedReader(new InputStreamReader(fstream));
 
+		    // Read URLs to datasets from a file or stdin
+		    if (line.hasOption("r")) {
+		    	BufferedReader br = null;
+		    	if (line.getOptionValue("r") == "-") {
+		    		// Use stdin
+		    		br = new BufferedReader(new InputStreamReader(System.in));
+		    	}
+		    	else {
+		    		// Open the file
+			    	br = new BufferedReader(new InputStreamReader(new FileInputStream(line.getOptionValue("r"))));
+		    	}
 		    	String strLine;
 
-		    	//Read File Line By Line
+		    	// Read File Line By Line
 		    	while ((strLine = br.readLine()) != null)   {
-			    	if (verbose)
-			    		ps.println("Adding URL to database... " + strLine);
-			    	db.addDataset(strLine);
+		    		String URLs[] = strLine.split("[ \t,]");
+			    	if (verbose) {
+			    		if (URLs.length > 1)
+			    			ps.println("Updating URL in database: " + URLs[0] + ", replaces: " + URLs[1]);
+			    		else
+			    			ps.println("Adding/Updating URL in database: " + URLs[0]);
+			    	}
+			    		
+			    	// if URLs[0] is not in the DB, then addNewDataset(URLs[0])
+			    	if (URLs.length > 1)
+			    		db.updateDataset(URLs[0], URLs[1]);
+			    	else 
+			    		db.updateDataset(URLs[0], null);
 		    	}
 
 		    	//Close the input stream
 		    	br.close();
 		    }
-		    
-		    for (int i = 1; i < remainingArgs.length; ++i) {
-		    	if (verbose)
-		    		ps.println("Adding URL to database... " + remainingArgs[i]);
-		    	db.addDataset(remainingArgs[i]);
+		    // handle the 'add new' option
+		    else if (line.hasOption("a")) {
+		    	if (line.getOptionValue("a") != null) {
+			    	if (verbose)
+			    		ps.println("Adding URL to database... " + line.getOptionValue("a"));
+			    	db.addNewDataset(line.getOptionValue("a"));
+			    }
+			    else {
+			    	System.err.println("When using -a you must supply a URL.");
+			    	return;
+			    }
+		    }
+		    else if (line.hasOption("u")) { // update existing URLs
+			    if (line.getOptionValue("u") != null) {
+			    	if (verbose) {
+			    		if (line.getOptionValue("o") != null)
+			    			ps.println("Updating URL in database: " + line.getOptionValue("u") + ", replaces: " + line.getOptionValue("o"));
+			    		else
+			    			ps.println("Updating URL in database: " + line.getOptionValue("u"));
+			    	}
+			    	
+			    	db.updateDataset(line.getOptionValue("u"), line.getOptionValue("o"));
+			    }
+			    else {
+			    	System.err.println("When using -u you must supply a URL to update (and may also supply, with -o, a URL to 'make obsolete'.");
+			    	return;
+			    }
+		    }
+		    else {	// error; must use -a or -u
+		    	System.err.println("You must use -a (add), -u (update) or -r (read from file/stdin)");
+		    	return;
 		    }
 		    
 		    if (verbose) {
