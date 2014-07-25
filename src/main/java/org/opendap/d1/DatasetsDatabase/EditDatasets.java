@@ -80,11 +80,11 @@ public class EditDatasets {
 
 		options.addOption("v", "verbose", false, "Write info to stdout");
 		options.addOption("i", "initialize", false, "Create tables for a blank database");
+		options.addOption("d", "dump", false, "Dump tables from database");
 		
 		options.addOption("r", "read", true, "Read dataset URLs from a file, else read URLs from the command line");
 		
 		options.addOption("a", "add", true, "Add the dataset(s) either from the command line or a file");
-		
 		options.addOption("u", "update", true, "If this URL, or any URL in the file of URLs, already is in the DB, update it's metadata");
 		options.addOption("o", "obsoletes", true, "Used with -u, this URL is obsoleted by the other URL (-u U_new -o U_obsoleted");
 		
@@ -153,12 +153,13 @@ public class EditDatasets {
 			    		else
 			    			ps.println("Adding/Updating URL in database: " + URLs[0]);
 			    	}
-			    		
-			    	// if URLs[0] is not in the DB, then addNewDataset(URLs[0])
+			    	
 			    	if (URLs.length > 1)
 			    		db.updateDataset(URLs[0], URLs[1]);
-			    	else 
-			    		db.updateDataset(URLs[0], null);
+			    	else if (db.isInDatabase(URLs[0])) 
+			    		db.updateDataset(URLs[0]);
+			    	else
+			    		db.addNewDataset(URLs[0]);
 		    	}
 
 		    	//Close the input stream
@@ -168,7 +169,8 @@ public class EditDatasets {
 		    else if (line.hasOption("a")) {
 		    	if (line.getOptionValue("a") != null) {
 			    	if (verbose)
-			    		ps.println("Adding URL to database... " + line.getOptionValue("a"));
+			    		ps.println("Adding URL to database: " + line.getOptionValue("a"));
+			    	
 			    	db.addNewDataset(line.getOptionValue("a"));
 			    }
 			    else {
@@ -184,16 +186,22 @@ public class EditDatasets {
 			    		else
 			    			ps.println("Updating URL in database: " + line.getOptionValue("u"));
 			    	}
-			    	
-			    	db.updateDataset(line.getOptionValue("u"), line.getOptionValue("o"));
+
+			    	if (line.getOptionValue("o") != null)
+			    		db.updateDataset(line.getOptionValue("u"), line.getOptionValue("o"));
+			    	else
+			    		db.updateDataset(line.getOptionValue("u"));
 			    }
 			    else {
-			    	System.err.println("When using -u you must supply a URL to update (and may also supply, with -o, a URL to 'make obsolete'.");
+			    	System.err.println("When using -u you must supply a URL to update (and may also supply an 'old' URL this replaces with -o).");
 			    	return;
 			    }
 		    }
+		    else if (line.hasOption("d")) { // dump
+		    	db.dump();
+		    }
 		    else {	// error; must use -a or -u
-		    	System.err.println("You must use -a (add), -u (update) or -r (read from file/stdin)");
+		    	System.err.println("You must use -a (add), -u (update), -r (read from file/stdin) or -d (dump)");
 		    	return;
 		    }
 		    

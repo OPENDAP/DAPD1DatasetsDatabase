@@ -149,6 +149,8 @@ public class DatasetsDatabase {
 		Statement stmt = c.createStatement();
 
 		try {
+			// This table holds the system metadata, except for the 'obsoletes' information,
+			// for a given D1 Persistent ID.
 			String sql = "CREATE TABLE Metadata "
 					+ "(Id			TEXT NOT NULL," // FOREIGN KEY; sqlite might not support this
 					+ " dateAdded 	TEXT NOT NULL,"
@@ -159,6 +161,10 @@ public class DatasetsDatabase {
 					+ " algorithm 	TEXT NOT NULL)";
 			stmt.executeUpdate(sql);
 			
+			// This matches the PID for an ORE document with the PIDs for the SDO and SMO
+			// and includes the actual ORE document. Building these on the fly did not work
+			// because the checksum would never match since the documents contain timestamps
+			// that mark when they are made.
 			sql = "CREATE TABLE ORE "
 					+ "(Id		TEXT NOT NULL," // FOREIGN KEY
 					+ " SMO_Id 	TEXT NOT NULL,"
@@ -166,19 +172,30 @@ public class DatasetsDatabase {
 					+ " ORE_Doc	BLOB NOT NULL)";
 			stmt.executeUpdate(sql);
 			
+			// Match the PID for a science data object with the URL that will return the SDO.
 			sql = "CREATE TABLE SDO "
 					+ "(Id		TEXT NOT NULL," // FOREIGN KEY
 					+ " DAP_URL	TEXT NOT NULL)";
 			stmt.executeUpdate(sql);
 			
+			// ...ditto for the SMO
 			sql = "CREATE TABLE SMO "
 					+ "(Id		TEXT NOT NULL," // FOREIGN KEY
 					+ " DAP_URL	TEXT NOT NULL)";
 			stmt.executeUpdate(sql);
 			
+			// Record which PIDs supersede older PIDs 
 			sql = "CREATE TABLE Obsoletes "
 					+ "(Id		TEXT NOT NULL," // FOREIGN KEY
 					+ " Previous TEXT NOT NULL)";
+			stmt.executeUpdate(sql);
+			
+			// Record the base URL for a DAP dataset and its associated PIDs.
+			sql = "CREATE TABLE Datasets "
+					+ "(DAP_BASE_URL	TEXT NOT NULL," // FOREIGN KEY
+					+ " SDO_Id 			TEXT NOT NULL,"
+					+ " SMO_Id 			TEXT NOT NULL,"
+					+ " ORE_Id			TEXT NOT NULL)";
 			stmt.executeUpdate(sql);
 			
 		} catch (SQLException e) {
@@ -200,7 +217,7 @@ public class DatasetsDatabase {
 	 * @throws SQLException
 	 */
 	public boolean isValid() throws SQLException {
-		final Set<String> tableNames = new HashSet<String>(Arrays.asList("Metadata", "ORE", "SMO", "SDO", "Obsoletes"));
+		final Set<String> tableNames = new HashSet<String>(Arrays.asList("Metadata", "ORE", "SMO", "SDO", "Obsoletes", "Datasets"));
 		
 		PreparedStatement stmt = null;
 		ResultSet rs = null;
@@ -256,117 +273,232 @@ public class DatasetsDatabase {
 		}
 	}
 	
+	public boolean isInDatabase(String dapURL) throws SQLException {
+		PreparedStatement stmt = c.prepareStatement("SELECT COUNT(*) FROM Datasets WHERE DAP_BASE_URL = ?;");
+		try {
+			stmt.setString(1,  dapURL);
+			ResultSet rs = stmt.executeQuery();
+			int count = 0;
+			while(rs.next()) {
+				count = rs.getInt(1);
+			}
+			rs.close();
+			
+			return count == 1;
+		}
+		finally {
+			stmt.close();
+		}
+	}
+	
 	/**
 	 * This version of loadDataset assumes that the SDO will be a netCDF file
 	 * and the SMO will be a ISO 19115 document. It uses the current time as
 	 * 'date added or modified.'
 	 * 
-	 * @param URL This is the base URL of the DAP Access point. DAP2 assumed.
+	 * @param dapURL This is the base URL of the DAP Access point. DAP2 assumed.
 	 * @throws SQLException
 	 */
-	public void addNewDataset(String URL) throws SQLException, Exception {
+	public void addNewDataset(String dapURL) throws SQLException, Exception {
 		c.setAutoCommit(false);
-		// PreparedStatement stmt = null;	// TODO use 3 PreparedStatments?
-		// PreparedStatement m_stmt = c.prepareStatement("INSERT INTO Metadata (Id,dateAdded,serialNumber,format,size,checksum,algorithm) VALUES (?, ?, ?, ?, ?, ?, ?);");
-
+		PreparedStatement d_stmt = c.prepareStatement("INSERT INTO Datasets (DAP_BASE_URL, SDO_ID, SMO_ID, ORE_ID) VALUES (?, ?, ?, ?);");
 		try {
-			// Use this ISO601 time string for all three entries
-			// String now8601 = DAPD1DateParser.DateToString(new Date());
 			Long serialNumber = new Long(1);	// when calling, dataset is always new
+			insertURL(dapURL, serialNumber);
 			
-			insertURL(URL, serialNumber);
-			/*
-			// First add the SDO info
-			String SDO = buildId(URL, SDO_IDENT, serialNumber);	// reuse SDO
-			String SDOURL = buildDAPURL(URL, SDO_EXT);
+			// "INSERT INTO Datasets (DAP_BASE_URL, SDO_ID, SMO_ID, ORE_ID) VALUES (?, ?, ?, ?);"
+			d_stmt.setString(1, dapURL);
+			d_stmt.setString(2, buildId(dapURL, SDO_IDENT, serialNumber));
+			d_stmt.setString(3, buildId(dapURL, SMO_IDENT, serialNumber));
+			d_stmt.setString(4, buildId(dapURL, ORE_IDENT, serialNumber));
+			d_stmt.executeUpdate();
 
-			stmt = c.prepareStatement("INSERT INTO SDO (Id, DAP_URL) VALUES (?,?);");
-			stmt.setString(1, SDO);
-			stmt.setString(2, SDOURL);
-			stmt.executeUpdate();
-			
-			CountingInputStream cis = getDAPURLContents(SDOURL);
-			Checksum checksum = ChecksumUtil.checksum(cis, "SHA-1");
-			Long size = new Long(cis.getByteCount());
-			cis.close();
-			
-			insertMetadata(m_stmt, now8601, serialNumber, SDO, SDO_FORMAT, checksum, size);
-
-			// Then add the SMO info
-			String SMO = buildId(URL, SMO_IDENT, serialNumber);
-			String SMOURL = buildDAPURL(URL, SMO_EXT);
-
-			stmt = c.prepareStatement("INSERT INTO SMO (Id, DAP_URL) VALUES (?,?);");
-			stmt.setString(1, SMO);
-			stmt.setString(2, SMOURL);
-			stmt.executeUpdate();
-
-			cis = getDAPURLContents(SMOURL);
-			checksum = ChecksumUtil.checksum(cis, "SHA-1");
-			size = new Long(cis.getByteCount());
-			cis.close();
-			
-			insertMetadata(m_stmt, now8601, serialNumber, SMO, SMO_FORMAT, checksum, size);
-
-			// Then add the ORE info
-			String ORE = buildId(URL, ORE_IDENT, serialNumber);
-
-			String resourceMapXML = getOREDoc(ORE, SMO, SDO);
-			cis = new CountingInputStream(new ByteArrayInputStream(resourceMapXML.getBytes()));
-			checksum = ChecksumUtil.checksum(cis, "SHA-1");
-			size = new Long(cis.getByteCount());
-			cis.close();
-			
-			stmt = c.prepareStatement("INSERT INTO ORE (Id, SDO_Id, SMO_Id, ORE_Doc) VALUES (?, ?, ?, ?);");
-			stmt.setString(1, ORE);
-			stmt.setString(2, SDO);
-			stmt.setString(3, SMO);
-			stmt.setBytes(4, resourceMapXML.getBytes());
-			stmt.executeUpdate();
-			
-			insertMetadata(m_stmt, now8601, serialNumber, ORE, ORE_FORMAT, checksum, size);
-			*/
 		} catch (SQLException e) {
 			log.error("Failed to load new dataset information in the database ({}).", dbName);
 			throw e;
 		} finally {
-			// stmt.close();
+			d_stmt.close();
 			c.commit();
 		}
 	}
 
 	/**
 	 * Update a dataset's entries. This does essentially what addNewDataset does,
-	 * with the exception that it increments the serial number and (optionally) 
-	 * puts an entry in the 'Obsoletes' table if the 'oldURL' parameter is not null.
+	 * with the exception that it increments the serial number and puts an entries
+	 * in the 'Obsoletes' table.
 	 *  
-	 * @param newURL
+	 * @param dapURL
 	 * @param oldURL IF this is null, simply update the metadata for newURL.
 	 * @throws SQLException
 	 * @throws Exception
 	 */
-	public void updateDataset(String newURL, String oldURL) throws SQLException, Exception {
+	public void updateDataset(String dapURL) throws SQLException, Exception {
 		c.setAutoCommit(false);
-		PreparedStatement stmt = c.prepareStatement("INSERT INTO Obsoletes (ID, Obsoletes) VALUES (?, ?);");
+		PreparedStatement o_stmt = c.prepareStatement("INSERT INTO Obsoletes (ID, Previous) VALUES (?, ?);");
+		PreparedStatement d_stmt = c.prepareStatement("UPDATE Datasets SET SDO_ID = ?, SMO_ID = ?, ORE_ID = ? WHERE DAP_BASE_URL = ?;");
+		
 		try {
-			if (oldURL != null) {
-				stmt.setString(1, newURL);
-				stmt.setString(2, oldURL);
-				stmt.executeUpdate();
-			}
-			
-			// Get the oldURL serial number and ad one
-			// FIXME getSerialNumber takes a PID, not a URL
-			Long serialNumber = getSerialNumber(oldURL).longValue() + 1;
+			// Get the dapURL serial number and add one to make the new serial number.
+			// Assume that all PIDs for a given dataset use the same SerialNumber, so we can
+			// look up the oldURL in the Datasets table, get any one of the PIDs and bump up
+			// PID's serial number. 
+			String SDOId = getSDOId(dapURL);
 
-			insertURL(newURL, serialNumber);
+			Long newSerialNumber = getSerialNumber(SDOId).longValue() + 1;
+			
+			// Now update the Obsoletes table, which will have three entries (one for each
+			// PID for the newURL/oldURL).
+			o_stmt.setString(1, buildId(dapURL, SDO_IDENT, newSerialNumber)); // the new PID
+			o_stmt.setString(2, SDOId);	// the old PID (read from the Datasets table).
+			o_stmt.executeUpdate();
+			
+			String SMOId = getSMOId(dapURL);
+			o_stmt.setString(1, buildId(dapURL, SMO_IDENT, newSerialNumber));
+			o_stmt.setString(2, SMOId);
+			o_stmt.executeUpdate();
+
+			String OREId = getOREId(dapURL);
+			o_stmt.setString(1, buildId(dapURL, ORE_IDENT, newSerialNumber));
+			o_stmt.setString(2, OREId);
+			o_stmt.executeUpdate();
+
+			// Now update the metadata and other tables
+			insertURL(dapURL, newSerialNumber);
+			
+			// "UPDATE Datasets SET SDO_ID = ?, SMO_ID = ?, ORE_ID = ? WHERE DAP_BASE_URL = ?;"
+			d_stmt.setString(4, dapURL);
+			d_stmt.setString(1, buildId(dapURL, SDO_IDENT, newSerialNumber));
+			d_stmt.setString(2, buildId(dapURL, SMO_IDENT, newSerialNumber));
+			d_stmt.setString(3, buildId(dapURL, ORE_IDENT, newSerialNumber));
+			d_stmt.executeUpdate();
 
 		} catch (SQLException e) {
 			log.error("Failed to load updated dataset information in the database ({}).", dbName);
 			throw e;
 		} finally {
-			stmt.close();
+			o_stmt.close();
+			d_stmt.close();
 			c.commit();
+		}
+	}
+
+	/**
+	 * Even though there are two URLs, we assume they refer to the same logical dataset.
+	 * @param newDapURL
+	 * @param oldDapURL
+	 * @throws SQLException
+	 * @throws Exception
+	 */
+	public void updateDataset(String newDapURL, String oldDapURL) throws SQLException, Exception {
+		c.setAutoCommit(false);
+		PreparedStatement o_stmt = c.prepareStatement("INSERT INTO Obsoletes (ID, Previous) VALUES (?, ?);");
+		PreparedStatement d_stmt = c.prepareStatement("INSERT INTO Datasets (DAP_BASE_URL, SDO_ID, SMO_ID, ORE_ID) VALUES (?, ?, ?, ?);");
+		
+		try {
+			// Get the oldDapURL serial number and add one to make the new serial number.
+			// Assume that all PIDs for a given dataset use the same SerialNumber, so we can
+			// look up the oldDapURL in the Datasets table, get any one of the PIDs and bump up
+			// PID's serial number, to make the new serial number.
+			String oldSDOId = getSDOId(oldDapURL);
+
+			Long newSerialNumber = getSerialNumber(oldSDOId).longValue() + 1;
+			
+			// Now update the Obsoletes table, which will have three entries (one for each
+			// PID for the newURL/oldURL).
+			o_stmt.setString(1, buildId(newDapURL, SDO_IDENT, newSerialNumber)); // the new PID
+			o_stmt.setString(2, oldSDOId);	// the old PID (read from the Datasets table).
+			o_stmt.executeUpdate();
+			
+			String oldSMOId = getSMOId(oldDapURL);
+			o_stmt.setString(1, buildId(newDapURL, SMO_IDENT, newSerialNumber));
+			o_stmt.setString(2, oldSMOId);
+			o_stmt.executeUpdate();
+
+			String oldOREId = getOREId(oldDapURL);
+			o_stmt.setString(1, buildId(newDapURL, ORE_IDENT, newSerialNumber));
+			o_stmt.setString(2, oldOREId);
+			o_stmt.executeUpdate();
+
+			// Now update the metadata and other tables
+			insertURL(newDapURL, newSerialNumber);
+			
+			// "INSERT INTO Datasets (DAP_BASE_URL, SDO_ID, SMO_ID, ORE_ID) VALUES (?, ?, ?, ?);"
+			d_stmt.setString(1, newDapURL);
+			d_stmt.setString(2, buildId(newDapURL, SDO_IDENT, newSerialNumber));
+			d_stmt.setString(3, buildId(newDapURL, SMO_IDENT, newSerialNumber));
+			d_stmt.setString(4, buildId(newDapURL, ORE_IDENT, newSerialNumber));
+			d_stmt.executeUpdate();
+		} catch (SQLException e) {
+			log.error("Failed to load updated dataset information in the database ({}).", dbName);
+			throw e;
+		} finally {
+			o_stmt.close();
+			d_stmt.close();
+			c.commit();
+		}
+	}
+
+	/**
+	 * Get the SDO Id bound to the DAP Base URL 'DAPUrl'
+	 * @param dapURL
+	 * @param d_stmt
+	 * @return
+	 * @throws DAPDatabaseException, SQLException 
+	 */
+	private String getSDOId(String dapURL) throws DAPDatabaseException, SQLException {
+		PreparedStatement d_stmt = c.prepareStatement("SELECT SDO_Id FROM Datasets WHERE DAP_BASE_URL = ?;");
+		try {
+			String pid = null;
+			d_stmt.setString(1, dapURL);
+			ResultSet rs = d_stmt.executeQuery();
+			while (rs.next())
+				pid = rs.getString("SDO_Id");
+			rs.close();
+			
+			if (pid == null)
+				throw new DAPDatabaseException( "The URL '" + dapURL + "' was not in the database");
+
+			return pid;
+		} finally {
+			d_stmt.close();
+		}
+	}
+
+	private String getSMOId(String dapURL) throws DAPDatabaseException, SQLException {
+		PreparedStatement d_stmt = c.prepareStatement("SELECT SMO_Id FROM Datasets WHERE DAP_BASE_URL = ?;");
+		try {
+			String pid = null;
+			d_stmt.setString(1, dapURL);
+			ResultSet rs = d_stmt.executeQuery();
+			while (rs.next())
+				pid = rs.getString("SMO_Id");
+			rs.close();
+			
+			if (pid == null)
+				throw new DAPDatabaseException( "The URL '" + dapURL + "' was not in the database");
+
+			return pid;
+		} finally {
+			d_stmt.close();
+		}
+	}
+
+	private String getOREId(String dapURL) throws DAPDatabaseException, SQLException {
+		PreparedStatement d_stmt = c.prepareStatement("SELECT ORE_Id FROM Datasets WHERE DAP_BASE_URL = ?;");
+		try {
+			String pid = null;
+			d_stmt.setString(1, dapURL);
+			ResultSet rs = d_stmt.executeQuery();
+			while (rs.next())
+				pid = rs.getString("ORE_Id");
+			rs.close();
+			
+			if (pid == null)
+				throw new DAPDatabaseException( "The URL '" + dapURL + "' was not in the database");
+
+			return pid;
+		} finally {
+			d_stmt.close();
 		}
 	}
 
@@ -374,82 +506,81 @@ public class DatasetsDatabase {
 	 * This is used by updateDataset and addNewDataset. The caller must call commit() on
 	 * the open DB connection.
 	 * 
-	 * @param newURL The URL to add
+	 * @param dapURL The URL to add
 	 * @param serialNumber It's serial number
 	 * @return
 	 * @throws Exception
 	 * @throws SQLException
 	 */
-	private void insertURL(String newURL, Long serialNumber) throws SQLException, Exception {
+	private void insertURL(String dapURL, Long serialNumber) throws SQLException, Exception {
 		PreparedStatement m_stmt = c.prepareStatement("INSERT INTO Metadata (Id,dateAdded,serialNumber,format,size,checksum,algorithm) VALUES (?, ?, ?, ?, ?, ?, ?);");
-		PreparedStatement sdo_stmt = null;
-		PreparedStatement smo_stmt = null;
-		PreparedStatement ore_stmt = null;
+		PreparedStatement sdo_stmt = c.prepareStatement("INSERT INTO SDO (Id, DAP_URL) VALUES (?,?);");
+		PreparedStatement smo_stmt = c.prepareStatement("INSERT INTO SMO (Id, DAP_URL) VALUES (?,?);");
+		PreparedStatement ore_stmt = c.prepareStatement("INSERT INTO ORE (Id, SDO_Id, SMO_Id, ORE_Doc) VALUES (?, ?, ?, ?);");
+		
 		// Use this ISO601 time string for all three entries
 		String now8601 = DAPD1DateParser.DateToString(new Date());
 
 		try {
 			// First add the SDO info
-			String SDO = buildId(newURL, SDO_IDENT, serialNumber); // reuse SDO
-			String SDOURL = buildDAPURL(newURL, SDO_EXT);
+			String sdoId = buildId(dapURL, SDO_IDENT, serialNumber); // reuse SDO
+			String sdoUrl = buildDAPURL(dapURL, SDO_EXT);
 
-			sdo_stmt = c.prepareStatement("INSERT INTO SDO (Id, DAP_URL) VALUES (?,?);");
-			sdo_stmt.setString(1, SDO);
-			sdo_stmt.setString(2, SDOURL);
+			// "INSERT INTO SDO (Id, DAP_URL) VALUES (?,?);"
+			sdo_stmt.setString(1, sdoId);
+			sdo_stmt.setString(2, sdoUrl);
 			sdo_stmt.executeUpdate();
 
-			CountingInputStream cis = getDAPURLContents(SDOURL);
+			CountingInputStream cis = getDAPURLContents(sdoUrl);
 			Checksum checksum = ChecksumUtil.checksum(cis, "SHA-1");
 			Long size = new Long(cis.getByteCount());
 			cis.close();
 
-			insertMetadata(m_stmt, now8601, serialNumber, SDO, SDO_FORMAT, checksum, size);
+			insertMetadata(m_stmt, now8601, serialNumber, sdoId, SDO_FORMAT, checksum, size);
 
 			// Then add the SMO info
-			String SMO = buildId(newURL, SMO_IDENT, serialNumber);
-			String SMOURL = buildDAPURL(newURL, SMO_EXT);
+			String smoId = buildId(dapURL, SMO_IDENT, serialNumber);
+			String smoUrl = buildDAPURL(dapURL, SMO_EXT);
 
-			smo_stmt = c.prepareStatement("INSERT INTO SMO (Id, DAP_URL) VALUES (?,?);");
-			smo_stmt.setString(1, SMO);
-			smo_stmt.setString(2, SMOURL);
+			// "INSERT INTO SMO (Id, DAP_URL) VALUES (?,?);"
+			smo_stmt.setString(1, smoId);
+			smo_stmt.setString(2, smoUrl);
 			smo_stmt.executeUpdate();
 
-			cis = getDAPURLContents(SMOURL);
+			cis = getDAPURLContents(smoUrl);
 			checksum = ChecksumUtil.checksum(cis, "SHA-1");
 			size = new Long(cis.getByteCount());
 			cis.close();
 
-			insertMetadata(m_stmt, now8601, serialNumber, SMO, SMO_FORMAT, checksum, size);
+			insertMetadata(m_stmt, now8601, serialNumber, smoId, SMO_FORMAT, checksum, size);
 
 			// Then add the ORE info
-			String ORE = buildId(newURL, ORE_IDENT, serialNumber);
+			String oreId = buildId(dapURL, ORE_IDENT, serialNumber);
 
-			String resourceMapXML = getOREDoc(ORE, SMO, SDO);
+			String resourceMapXML = getOREDoc(oreId, smoId, sdoId);
 			cis = new CountingInputStream(new ByteArrayInputStream(resourceMapXML.getBytes()));
 			checksum = ChecksumUtil.checksum(cis, "SHA-1");
 			size = new Long(cis.getByteCount());
 			cis.close();
 
-			ore_stmt = c.prepareStatement("INSERT INTO ORE (Id, SDO_Id, SMO_Id, ORE_Doc) VALUES (?, ?, ?, ?);");
-			ore_stmt.setString(1, ORE);
-			ore_stmt.setString(2, SDO);
-			ore_stmt.setString(3, SMO);
+			// "INSERT INTO ORE (Id, SDO_Id, SMO_Id, ORE_Doc) VALUES (?, ?, ?, ?);"
+			ore_stmt.setString(1, oreId);
+			ore_stmt.setString(2, sdoId);
+			ore_stmt.setString(3, smoId);
 			ore_stmt.setBytes(4, resourceMapXML.getBytes());
 			ore_stmt.executeUpdate();
 
-			insertMetadata(m_stmt, now8601, serialNumber, ORE, ORE_FORMAT, checksum, size);
+			insertMetadata(m_stmt, now8601, serialNumber, oreId, ORE_FORMAT, checksum, size);
+			
 			
 		} catch (SQLException e) {
 			log.error("Failed to insert URL into database ({}).", dbName);
 			throw e;
 		} finally {
-			if (sdo_stmt != null)
-				sdo_stmt.close();
-			if (smo_stmt != null)
-				smo_stmt.close();
-			if (ore_stmt != null)
-				ore_stmt.close();
-			
+			sdo_stmt.close();
+			smo_stmt.close();
+			ore_stmt.close();
+
 			m_stmt.close();
 		}
 	}
@@ -468,8 +599,7 @@ public class DatasetsDatabase {
 	private void insertMetadata(PreparedStatement stmt, String now8601,
 			Long serialNumber, String PID, String format, Checksum checksum,
 			Long size) throws SQLException {
-		// prepareStatement("INSERT INTO Metadata (Id,dateAdded,serialNumber,format,size,checksum,algorithm) VALUES (?, ?, ?, ?, ?, ?, ?);");
-
+		// "INSERT INTO Metadata (Id,dateAdded,serialNumber,format,size,checksum,algorithm) VALUES (?, ?, ?, ?, ?, ?, ?);");
 		stmt.setString(1, PID);
 		stmt.setString(2, now8601);
 		stmt.setString(3, serialNumber.toString());
@@ -586,6 +716,7 @@ public class DatasetsDatabase {
 		ResultSet rs = null;
 		try {
 			String sql = "SELECT * FROM Metadata ORDER BY ROWID;";
+			System.out.println("Metadata:");
 			rs = stmt.executeQuery(sql);
 			while (rs.next()) {
 				System.out.println("Id = " + rs.getString("Id"));
@@ -597,11 +728,61 @@ public class DatasetsDatabase {
 				System.out.println();
 			}
 
+			sql = "SELECT * FROM Datasets ORDER BY ROWID;";
+			System.out.println("Datasets:");
+			rs = stmt.executeQuery(sql);
+			while (rs.next()) {
+				System.out.println("Id = " + rs.getString("DAP_BASE_URL"));
+				System.out.println("SDO ID = " + rs.getString("SDO_ID"));
+				System.out.println("SMO ID = " + rs.getString("SMO_ID"));
+				System.out.println("ORE ID = " + rs.getString("ORE_ID"));
+				System.out.println();
+			}
+
+			sql = "SELECT * FROM SDO ORDER BY ROWID;";
+			System.out.println("SDO:");
+			rs = stmt.executeQuery(sql);
+			while (rs.next()) {
+				System.out.println("Id = " + rs.getString("id"));
+				System.out.println("DAP_URL = " + rs.getString("DAP_URL"));
+				System.out.println();
+			}
+
+			sql = "SELECT * FROM SMO ORDER BY ROWID;";
+			System.out.println("SMO:");
+			rs = stmt.executeQuery(sql);
+			while (rs.next()) {
+				System.out.println("Id = " + rs.getString("id"));
+				System.out.println("DAP_URL = " + rs.getString("DAP_URL"));
+				System.out.println();
+			}
+
+
+			sql = "SELECT * FROM ORE ORDER BY ROWID;";
+			System.out.println("ORE:");
+			rs = stmt.executeQuery(sql);
+			while (rs.next()) {
+				System.out.println("Id = " + rs.getString("id"));
+				System.out.println("SDO_Id = " + rs.getString("SDO_Id"));
+				System.out.println("SMO_Id = " + rs.getString("SMO_Id"));
+				System.out.println();
+			}
+
+			sql = "SELECT * FROM Obsoletes ORDER BY ROWID;";
+			System.out.println("Obsoletes:");
+			rs = stmt.executeQuery(sql);
+			while (rs.next()) {
+				System.out.println("ID = " + rs.getString("ID"));
+				System.out.println("Previous = " + rs.getString("Previous"));
+				System.out.println();
+			}
+
 		} catch (SQLException e) {
 			log.error("Failed to dump database tables (" + dbName + ").");
 			throw e;
 		} finally {
-			rs.close();
+			if (rs != null)
+				rs.close();
 			stmt.close();
 		}
 	}
@@ -739,19 +920,15 @@ public class DatasetsDatabase {
 	 * @throws SQLException
 	 */
 	public String getObsoletedBy(String PID) throws SQLException {
-		String pid = null;
-		PreparedStatement stmt = null;
-		ResultSet rs = null;
+		PreparedStatement stmt = c.prepareStatement("SELECT ID From Obsoletes where Previous = ?;");;
 		
 		try {
-			stmt = c.prepareStatement("SELECT ID From Obsoletes where Previous = ?;");
+			String pid = null;
 			stmt.setString(1,  PID);
-			
-			rs = stmt.executeQuery();
-			
-			while (rs.next()) {
+			ResultSet rs = stmt.executeQuery();
+			while (rs.next())
 				pid = rs.getString(1);
-			}
+			rs.close();
 
 			return pid;
 		}
@@ -760,10 +937,7 @@ public class DatasetsDatabase {
 			throw e;
 		}
 		finally {
-			if (stmt != null)
-				stmt.close();
-			if (rs != null)
-				rs.close();
+			stmt.close();
 		}
 	}
 	
@@ -845,19 +1019,19 @@ public class DatasetsDatabase {
 	
 	private String getTextMetadataItem(String pid, String field) throws SQLException, DAPDatabaseException {
 		PreparedStatement stmt = c.prepareStatement("SELECT " + field + " FROM Metadata WHERE Id = ?;");
-		stmt.setString(1, pid);
 
-		ResultSet rs = null;
-		String item = null;
 		try {
 			int count = 0;
+			String item = null;
 			
-			rs = stmt.executeQuery();
+			stmt.setString(1, pid);
+			ResultSet rs = stmt.executeQuery();
 			while (rs.next()) {
 				count++;
 				item = rs.getString(field);
 			}
-
+			rs.close();
+			
 			switch (count) {
 			case 0:
 				throw new DAPDatabaseException("Corrupt database. Did not find '" + field + "' for '" + pid + "'.");
@@ -870,10 +1044,9 @@ public class DatasetsDatabase {
 			}
 			
 		} catch (SQLException e) {
-			log.error("Corrupt database (" + dbName + ").");
+			log.error("Corrupt database ({})", dbName);
 			throw e;
 		} finally {
-			rs.close();
 			stmt.close();
 		}
 	}
@@ -894,8 +1067,8 @@ public class DatasetsDatabase {
 	 */
 	public List<DatasetMetadata> getAllMetadata(Date fromDate, Date toDate, ObjectFormatIdentifier format,
 			int start, int count) throws SQLException, DAPDatabaseException {
+		
 		PreparedStatement stmt = null;
-		ResultSet rs = null;
 		Vector<DatasetMetadata> dmv = new Vector<DatasetMetadata>();
 		try {
 			String sql = buildMetadataWhereClause("SELECT * FROM Metadata", fromDate, toDate, format, " ORDER BY ROWID;");
@@ -904,7 +1077,7 @@ public class DatasetsDatabase {
 			
 			populateMetadataWhereClause(fromDate, toDate, format, stmt);
 			
-			rs = stmt.executeQuery();
+			ResultSet rs = stmt.executeQuery();
 
 			while (start-- > 0 && rs.next());
 
@@ -914,6 +1087,7 @@ public class DatasetsDatabase {
 				dmv.add(new DatasetMetadata(rs.getString("Id"), rs.getString("format"), rs.getString("checksum"),
 						rs.getString("algorithm"), rs.getString("size"), rs.getString("dateAdded")));
 			}
+			rs.close();
 			
 			return dmv;
 		} catch (SQLException e) {
@@ -923,8 +1097,6 @@ public class DatasetsDatabase {
 			log.error("Corrupt database (" + dbName + "). Could not parse a Date/Time value: " + e.getMessage());
 			throw new DAPDatabaseException(e.getMessage());
 		} finally {
-			if (rs != null)
-				rs.close();
 			if (stmt != null)
 				stmt.close();
 		}
@@ -967,15 +1139,13 @@ public class DatasetsDatabase {
 	 * if the PID does not actually reference a DAP URL.
 	 */
 	public String getDAPURL(String pid) throws SQLException, DAPDatabaseException {
-		//Statement stmt = c.createStatement();
 		PreparedStatement stmt = null;
-		ResultSet rs = null;
 		try {
 			String URL = null;
 			int count = 0;
 			stmt = c.prepareStatement("SELECT SDO.DAP_URL FROM SDO WHERE SDO.Id = ?;");
 			stmt.setString(1, pid);
-			rs = stmt.executeQuery();
+			ResultSet rs = stmt.executeQuery();
 			while (rs.next()) {
 				count++;
 				URL = rs.getString("DAP_URL");
@@ -988,6 +1158,7 @@ public class DatasetsDatabase {
 				count++;
 				URL = rs.getString("DAP_URL");
 			}
+			rs.close();
 			
 			switch (count) {
 			case 0:
@@ -1000,11 +1171,9 @@ public class DatasetsDatabase {
 				throw new DAPDatabaseException("Corrupt database. Found more that one entry for '" + pid + "'.");	
 			}
 		} catch (SQLException e) {
-			log.error("Corrupt database (" + dbName + "): " + e.getMessage());
+			log.error("Corrupt database ({}): {}", dbName, e.getMessage());
 			throw e;
 		} finally {
-			if (rs != null)
-				rs.close();
 			if (stmt != null)
 				stmt.close();
 		}
@@ -1025,17 +1194,17 @@ public class DatasetsDatabase {
 	public List<String> getIdentifiersForORE(String pid) throws SQLException, DAPDatabaseException {
 		// Statement stmt = c.createStatement();
 		PreparedStatement stmt = null;
-		ResultSet rs = null;
 		try {
 			Vector<String> ids = new Vector<String>();
 			//String sql = "SELECT ORE.SDO_Id, ORE.SMO_Id FROM ORE WHERE ORE.Id = '" + pid + "';";
 			stmt = c.prepareStatement("SELECT ORE.SDO_Id, ORE.SMO_Id FROM ORE WHERE ORE.Id = ?;");
 			stmt.setString(1, pid);
-			rs = stmt.executeQuery();
+			ResultSet rs = stmt.executeQuery();
 			while (rs.next()) {
 				ids.add(rs.getString("SMO_Id"));
 				ids.add(rs.getString("SDO_Id"));
 			}
+			rs.close();
 			
 			switch (ids.size()) {
 			case 0:
@@ -1052,8 +1221,6 @@ public class DatasetsDatabase {
 			log.error("Corrupt database (" + dbName + "): " + e.getMessage());
 			throw e;
 		} finally {
-			if (rs != null)
-				rs.close();
 			if (stmt != null)
 				stmt.close();
 		}
@@ -1073,17 +1240,15 @@ public class DatasetsDatabase {
 	 * @throws DAPDatabaseException
 	 */
 	public String getOREDoc(String pid) throws SQLException, DAPDatabaseException {
-		PreparedStatement stmt = null;
-		ResultSet rs = null;
+		PreparedStatement stmt = c.prepareStatement("SELECT ORE.ORE_Doc FROM ORE WHERE ORE.Id = ?;");
 		try {
 			String ore_doc = null;
-			stmt = c.prepareStatement("SELECT ORE.ORE_Doc FROM ORE WHERE ORE.Id = ?;");
 			stmt.setString(1, pid);
-			rs = stmt.executeQuery();
-			while (rs.next()) {
+			ResultSet rs = stmt.executeQuery();
+			while (rs.next())
 				ore_doc = rs.getString("ORE_Doc");
-			}
-			
+			rs.close();
+
 			if (ore_doc == null)
 				throw new DAPDatabaseException("Did not find the ORE document for '" + pid + "'.");
 
@@ -1092,10 +1257,7 @@ public class DatasetsDatabase {
 			log.error("Corrupt database ({}): {}", dbName, e.getMessage());
 			throw e;
 		} finally {
-			if (rs != null)
-				rs.close();
-			if (stmt != null)
-				stmt.close();
+			stmt.close();
 		}
 	}
 
