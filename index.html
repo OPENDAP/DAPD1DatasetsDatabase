@@ -60,25 +60,9 @@
 <p>This project and its companion, DAPD1Servlet, use Maven. Because this project is required by the DAPD1Servlet, if you've followed the build instructions there, you have already built this project. If that's the case, skip down to the section on Testing or on Serving you own data.</p>
 
 <h3>
-<a name="get-maven-if-you-do-not-already-have-it" class="anchor" href="#get-maven-if-you-do-not-already-have-it"><span class="octicon octicon-link"></span></a>Get Maven if you do not already have it</h3>
-
-<p>Goto <a href="http://maven.apache.org/download.cgi">http://maven.apache.org/download.cgi</a>, get the binary and install it. On a Mac OSX machine, put the <code>apache-maven-&lt;ver&gt;</code> directory in <code>/Applications</code>. Then add</p>
-
-<ul>
-<li>export M2_HOME=/Applications/apache-maven-3.1.1</li>
-<li>export PATH=$PATH:$M2_HOME/bin
-to <code>.bashrc</code> or the equivalent. <code>mvn --version</code> should work and return the expected info. </li>
-</ul><h3>
 <a name="build-the-code" class="anchor" href="#build-the-code"><span class="octicon octicon-link"></span></a>Build the code</h3>
 
 <p>Use git to <code>clone</code> the project (<a href="https://github.com/opendap/DAPD1DatasetsDatabase">DAPD1DatasetsDatabase</a>) and build it using <code>mvn clean install</code>. This will build the executable jar file used by the edit-db.sh bash shell script and install that in the local maven repository so it can be found by the DAPD1Servlet build. </p>
-
-<p>Note:</p>
-
-<blockquote>
-<p>I use Eclipse with the Maven plugin (<a href="http://download.eclipse.org/technology/m2e/releases">m2e</a>). Once the code is checked out using <code>git clone</code> on the command line, use <code>Eclipse:File:Import...</code> and choose <code>Git-&gt;Existing</code> local repository and select 
-the <code>import as general &gt; project</code> option. In the project, Right click on the <code>pox.xml</code> file and choose <code>Run As...</code> to build. It would also work to check out the code directly into Eclipse.</p>
-</blockquote>
 
 <h3>
 <a name="testing-the-software" class="anchor" href="#testing-the-software"><span class="octicon octicon-link"></span></a>Testing the software</h3>
@@ -143,8 +127,9 @@ Obsoletes:
 
 <p>Since DAP datasets are bound to URLs and URLs are unique, it makes sense to use those as the basis of the PIDs used by the server. However, one URL will have several PIDs associated with it - one PID for each of the the SDO, SMO and ORE responses. Then, if the dataset is updated, even if the URL remains the same, there will be a new set of PIDs. The 'formula' for making a PID is to take the DAP URL and build the PID using the host name followed by a token made up of 'opendap', then one of 'sdo', 'smo' or 'ore' and an integer that corresponds to the dataset's DataONE serial number followed by the path part of the DAP URL. </p>
 
-<p>Here's an example PID for a SMO: <code>test.opendap.org/dataone_smo_1/opendap/hyrax/data/nc/fnoc1.nc</code>. 
-The matching DAP URL is: <code>http://test.opendap.org/opendap/hyrax/data/nc/fnoc1.nc.iso</code>.</p>
+<p>Here's an example PID for a SMO: <code>test.opendap.org/dataone_smo_1/opendap/hyrax/data/nc/fnoc1.nc</code>. </p>
+
+<p>The matching DAP URL is: <code>http://test.opendap.org/opendap/hyrax/data/nc/fnoc1.nc.iso</code>.</p>
 
 <h2>
 <a name="optimizations-and-improvements" class="anchor" href="#optimizations-and-improvements"><span class="octicon octicon-link"></span></a>Optimizations and Improvements</h2>
@@ -154,6 +139,11 @@ The matching DAP URL is: <code>http://test.opendap.org/opendap/hyrax/data/nc/fno
 <p>The database tables are, I think, at least in third normal form and so it is possible to use the SQL JOIN command efficiently to replace multiple queries with a single access to two or more JOINed tables.</p>
 
 <p>It would be much nicer to have a GUI of some sort (a web interface?) that would provide a more interactive way to look at the database contents and update the datasets. At the same time, if the SMO responses were stored in the database this proposed UI could be used to edit/augment the information in those responses. This could improve the performance of the DataONE catalog search functions implemented by the Coordinating Nodes.</p>
+
+<h2>
+<a name="limitations" class="anchor" href="#limitations"><span class="octicon octicon-link"></span></a>Limitations</h2>
+
+<p>There is no provision to delete datasets from the database. This is a limitation that comes from the mismatch between DataONE, which provides storage for datasets and can ensure they are never deleted, and DAP which does not. So, the datasets in the database can 'go away' but there's do way to indicate that in the database. Once it's in there ...</p>
       </section>
       <footer>
         <p>This project is maintained by <a href="https://github.com/OPENDAP">OPENDAP</a></p>
