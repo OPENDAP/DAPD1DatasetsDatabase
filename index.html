@@ -1,0 +1,152 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <title>Dapd1datasetsdatabase by jgallagher59701</title>
+
+    <link rel="stylesheet" href="stylesheets/styles.css">
+    <link rel="stylesheet" href="stylesheets/pygment_trac.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <!--[if lt IE 9]>
+    <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <div class="wrapper">
+      <header>
+        <h1>Dapd1datasetsdatabase</h1>
+        <p>Build and maintain the database for the DAP-DataONE Server</p>
+
+        <p class="view"><a href="https://github.com/jgallagher59701/DAPD1DatasetsDatabase">View the Project on GitHub <small>jgallagher59701/DAPD1DatasetsDatabase</small></a></p>
+
+
+        <ul>
+          <li><a href="https://github.com/jgallagher59701/DAPD1DatasetsDatabase/zipball/master">Download <strong>ZIP File</strong></a></li>
+          <li><a href="https://github.com/jgallagher59701/DAPD1DatasetsDatabase/tarball/master">Download <strong>TAR Ball</strong></a></li>
+          <li><a href="https://github.com/jgallagher59701/DAPD1DatasetsDatabase">View On <strong>GitHub</strong></a></li>
+        </ul>
+      </header>
+      <section>
+        <h1>
+<a name="welcome-to-the-dap-dataone-server-database-documentation" class="anchor" href="#welcome-to-the-dap-dataone-server-database-documentation"><span class="octicon octicon-link"></span></a>Welcome to the DAP-DataONE server database documentation</h1>
+
+<p>The DAP-DataONE server is an implementation of a DataONE version 1, tier 1 Member Node. It is designed to act as a kind of broker for DataONE clients and data served using OPeNDAP. The server itself can be found in the project <a href="https://github.com/opendap/DAPD1Servelt">DAPD1Servlet</a>. This project has the code that is used to build, edit and access the database of DAP datasets used by that servlet. The DAP-DataONE sever uses the DatasetsDatabase to hold information each DAP dataset that the server makes available to DataONE clients. The servlet uses information stored in the database to build responses to the various DataONE API calls.</p>
+
+<p>This project is a dependency of the DAPD1Servlet project.</p>
+
+<h2>
+<a name="whats-here-in-the-documentation" class="anchor" href="#whats-here-in-the-documentation"><span class="octicon octicon-link"></span></a>What's here in the documentation?</h2>
+
+<p>The documentation contains information about how to:</p>
+
+<ul>
+<li>Build the software from source</li>
+<li>Testing the software</li>
+<li>Serving your own data</li>
+</ul><p>In addition, there is documentation that discusses ways the server could be made more powerful and limitations imposed by the designs of DAP2 and DataONE:</p>
+
+<ul>
+<li>How it works</li>
+<li>Optimizations and Improvements</li>
+<li>Limitations</li>
+</ul><h2>
+<a name="beta-software-what-we-assume" class="anchor" href="#beta-software-what-we-assume"><span class="octicon octicon-link"></span></a>Beta software; What we assume</h2>
+
+<p>This is beta software without a polished build/install process. We assume you are computer savvy and know how to configure systems, install software, write shell scripts ... all that stuff. If you want to use this software but are unfamiliar with these kinds of things, contact us at <a href="mailto:support@opendap.org">support@opendap.org</a> or <a href="https://www.dataone.org/contact">DataONE:Contact</a>.</p>
+
+<h2>
+<a name="build-the-software" class="anchor" href="#build-the-software"><span class="octicon octicon-link"></span></a>Build the software</h2>
+
+<p>This project and its companion, DAPD1Servlet, use Maven. Because this project is required by the DAPD1Servlet, if you've followed the build instructions there, you have already built this project. If that's the case, skip down to the section on Testing or on Serving you own data.</p>
+
+<h3>
+<a name="get-maven-if-you-do-not-already-have-it" class="anchor" href="#get-maven-if-you-do-not-already-have-it"><span class="octicon octicon-link"></span></a>Get Maven if you do not already have it</h3>
+
+<p>Goto <a href="http://maven.apache.org/download.cgi">http://maven.apache.org/download.cgi</a>, get the binary and install it. On a Mac OSX machine, put the <code>apache-maven-&lt;ver&gt;</code> directory in <code>/Applications</code>. Then add</p>
+
+<ul>
+<li>export M2_HOME=/Applications/apache-maven-3.1.1</li>
+<li>export PATH=$PATH:$M2_HOME/bin
+to <code>.bashrc</code> or the equivalent. <code>mvn --version</code> should work and return the expected info. </li>
+</ul><h3>
+<a name="build-the-code" class="anchor" href="#build-the-code"><span class="octicon octicon-link"></span></a>Build the code</h3>
+
+<p>Use git to <code>clone</code> the project (<a href="https://github.com/opendap/DAPD1DatasetsDatabase">DAPD1DatasetsDatabase</a>) and build it using <code>mvn clean install</code>. This will build the executable jar file used by the edit-db.sh bash shell script and install that in the local maven repository so it can be found by the DAPD1Servlet build. </p>
+
+<p>Note:</p>
+
+<blockquote>
+<p>I use Eclipse with the Maven plugin (<a href="http://download.eclipse.org/technology/m2e/releases">m2e</a>). Once the code is checked out using <code>git clone</code> on the command line, use <code>Eclipse:File:Import...</code> and choose <code>Git-&gt;Existing</code> local repository and select 
+the <code>import as general &gt; project</code> option. In the project, Right click on the <code>pox.xml</code> file and choose <code>Run As...</code> to build. It would also work to check out the code directly into Eclipse.</p>
+</blockquote>
+
+<h3>
+<a name="testing-the-software" class="anchor" href="#testing-the-software"><span class="octicon octicon-link"></span></a>Testing the software</h3>
+
+<p>The software includes som limited unit tests that will run as part of the maven build, so if the build worked, those passed. This project comes with a test database - one of the advantages of SQLite is that the database files can be moved from machine to machine and still work. To test that the software is working, use the command line tool <code>edit-db.sh</code> to dump the database contents: <code>./edit-db.sh -d test.db</code>. You should see quite a bit of output:</p>
+
+<pre><code>[nori:DAPD1DatasetsDatabase jimg$] ./edit-db.sh -d test.db
+21:46:05.458 [main] DEBUG o.o.d1.DatasetsDatabase.EditDatasets - Starting debug logging
+Database Name: test.db
+21:46:05.633 [main] DEBUG o.o.d.D.DatasetsDatabase - Opened database successfully (test.db).
+Metadata:
+Id = test.opendap.org/dataone_sdo_1/opendap/hyrax/data/nc/fnoc1.nc
+Date = 2014-07-25T22:26:33.607+00:00
+FormatId = netcdf
+Size = 24096
+Checksum = 1d3afb4218605ca39a16e6fc5ffdfe1544b1dd0a
+Algorithm = SHA-1
+.
+.
+.
+SMO_Id = test.opendap.org/dataone_smo_1/opendap/hyrax/data/nc/fnoc1.nc
+
+Id = test.opendap.org/dataone_ore_1/opendap/hyrax/data/nc/coads_climatology.nc
+SDO_Id = test.opendap.org/dataone_sdo_1/opendap/hyrax/data/nc/coads_climatology.nc
+SMO_Id = test.opendap.org/dataone_smo_1/opendap/hyrax/data/nc/coads_climatology.nc
+
+Obsoletes:
+[nori:DAPD1DatasetsDatabase jimg$]
+</code></pre>
+
+<h3>
+<a name="serving-your-own-data" class="anchor" href="#serving-your-own-data"><span class="octicon octicon-link"></span></a>Serving your own data</h3>
+
+<p>Serving your own data means building a database of datasets using the <code>edit-db.sh</code> tool. Instead of overwriting the <code>test.db</code> database, make a new one. The <code>test.db</code> database is used by the unit tests - those tests depend on its contents. The <code>edit-db.sh</code> tool has online help (-h). Here's a list of its options and how you can use them to build up the database.</p>
+
+<p>The <code>edit-db.sh</code> command always takes the name of a database file. To initialize a new database, use the <code>-i</code> option as in: <code>./edit-db.sh -i -d my_datasets.db</code>. Note that if you want to erase a database and start over you'll have to delete it using the shell; if you use <code>-i</code> with a database that already exists, you'll get an error.</p>
+
+<p>OK, now with the database initialized, you can use <code>-a</code> to add a dataset like this: <code>./edit-db.sh -a http://.../fnoc1.nc my_datasets.db</code>. You always need to include the database name; the argument to <code>-a</code> is DAP URL to the dataset. One of the ideas behind DataONE is that datasets can have versions. The database supports this idea by storing a serial number for each version of each dataset. You can edit the database to update the URL for a given dataset using the <code>-u</code> option like this: <code>./edit-db.sh -u http://.../fnoc1.nc my_datasets.db</code>. This will read new metadata for the URL, bump up the serial number and mark the new information as superseding the old information (DataONE uses the words <em>obsoletes</em> and <em>obsoletedBy</em>). If the URL itself has changes, use the <code>-o</code> option to provide the URL that is being obsoleted by the new URL (the argument to <code>-u</code>). Like this: <code>./edit-db.sh -u http://.../fnoc2.nc -o http://.../fnoc1.nc my_datasets.db</code>.</p>
+
+<p>At any time <code>./edit-db.sh -d my_datasets.db</code> will show you the contents of the database.</p>
+
+<p>You can guess that entering each URL by hand could get fairly tiring... but there's an easier way. Use the <code>-r</code> option to read a list of URLs from a file or from standard input. Put the DAP URLs in a file, one per line and use <code>./edit-db.sh -r datasets.txt my_datasets.db</code> (note that there's a file called <code>dataset.txt</code> in this project and the <code>test.db</code> database can be (re)built using it). The input to <code>-r</code> makes some assumptions about what you want to do. If the URL is already in the databse, it will assume you want to update it (<code>-u</code>); if it's not in the database, it will assume you want to add (<code>-a</code>) it; and if two URLs are given on a line it assumes the first URL should update the second - as if you used <code>-u &lt;first URL&gt; -o &lt;second URL&gt;</code>. Also note that -r will read from standard input if <code>-</code> is used as the file name.</p>
+
+<h2>
+<a name="about-the-design-potential-optimizations-and-its-current-limitations" class="anchor" href="#about-the-design-potential-optimizations-and-its-current-limitations"><span class="octicon octicon-link"></span></a>About the design, potential optimizations and its current limitations</h2>
+
+<p>This tool, the functions that access the database and the database itself are pretty basic. Information about each dataset is held in six tables in the database. Most of the code that accesses the database is part of this project, shielding the DAPD1Servlet from the actual database structure.</p>
+
+<h3>
+<a name="how-it-works" class="anchor" href="#how-it-works"><span class="octicon octicon-link"></span></a>How it works</h3>
+
+<p><em>I'm going to assume you know how DataONE works, at least at a basic level.</em></p>
+
+<p>For each DAP dataset, there is a single 'base URL' that is used to access both the Science Data Object (SDO) and Science Metadata Object (SMO). The URLs that will return those are built by appending a particular suffix to the base URL. Thus, for each DAP dataset, there is a 'base URL' and two derived URLs. Furthermore, DataONE uses Persistent Identifiers (PIDs) to refer to the SDO, SMO and ORE documents. The PIDs are send to the DataONE server as an argument of the 'object' function and the DataONE server returns the correct thing. Because of this, we must map those PIDs to the URLs that can be used to access the SDO and SMO from the DAP server. The ORE document, as explained in the DAPD1Servlet documentation, is stored in the database; more on that in a bit.</p>
+
+<h2>
+<a name="optimizations-and-improvements" class="anchor" href="#optimizations-and-improvements"><span class="octicon octicon-link"></span></a>Optimizations and Improvements</h2>
+
+<h2>
+<a name="limitations" class="anchor" href="#limitations"><span class="octicon octicon-link"></span></a>Limitations</h2>
+      </section>
+      <footer>
+        <p>This project is maintained by <a href="https://github.com/jgallagher59701">jgallagher59701</a></p>
+        <p><small>Hosted on GitHub Pages &mdash; Theme by <a href="https://github.com/orderedlist">orderedlist</a></small></p>
+      </footer>
+    </div>
+    <script src="javascripts/scale.fix.js"></script>
+    
+  </body>
+</html>
