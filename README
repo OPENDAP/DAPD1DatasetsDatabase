@@ -1,0 +1,22 @@
+
+Updated 8/10/14
+
+This project holds the software to build, update, and access the database
+for the DAPD1Servlet project - a DAP-DataONE broker. The database is used
+to hold all of the information about a DAP dataset that the DAP-DataONE 
+server will need to build responses to the DataONE tier 1 member node
+REST API.
+
+This project uses SQLite for the database. It includes a sample database,
+a shell script that is a simple command line tool to edit and update the
+database and some other support files.
+
+Building the code
+
+This project and its companion use Maven. Build it using 'mvn install'.
+
+Configuration
+
+See the online docs at http://opendap.github.io/DAPD1DatasetsDatabase for 
+help on building a database for your datasets.
+ 

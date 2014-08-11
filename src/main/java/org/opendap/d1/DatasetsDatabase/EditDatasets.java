@@ -85,7 +85,7 @@ public class EditDatasets {
 		options.addOption("r", "read", true, "Read dataset URLs from a file, else read URLs from the command line");
 		
 		options.addOption("a", "add", true, "Add the dataset(s) either from the command line or a file");
-		options.addOption("u", "update", true, "If this URL, or any URL in the file of URLs, already is in the DB, update it's metadata");
+		options.addOption("u", "update", true, "If this URL, or any URL in the file of URLs, is already in the DB, update it's metadata");
 		options.addOption("o", "obsoletes", true, "Used with -u, this URL is obsoleted by the other URL (-u U_new -o U_obsoleted");
 		
 		// options.addOption("w", "warn", true, "If there are errors because a URL is already in the DB, make them errors and keep going");
