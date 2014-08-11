@@ -132,18 +132,28 @@ Obsoletes:
 
 <p><em>I'm going to assume you know how DataONE works, at least at a basic level.</em></p>
 
-<p>For each DAP dataset, there is a single 'base URL' that is used to access both the Science Data Object (SDO) and Science Metadata Object (SMO). The URLs that will return those are built by appending a particular suffix to the base URL. Thus, for each DAP dataset, there is a 'base URL' and two derived URLs. Furthermore, DataONE uses Persistent Identifiers (PIDs) to refer to the SDO, SMO and ORE documents. The PIDs are send to the DataONE server as an argument of the 'object' function and the DataONE server returns the correct thing. Because of this, we must map those PIDs to the URLs that can be used to access the SDO and SMO from the DAP server. The ORE document, as explained in the DAPD1Servlet documentation, is stored in the database; more on that in a bit.</p>
+<p>For each DAP dataset, there is a single 'base URL' that is used to access both the Science Data Object (SDO) and Science Metadata Object (SMO). The URLs that will return those are built by appending a particular suffix to the base URL. Thus, for each DAP dataset, there is a 'base URL' and two derived URLs. Furthermore, DataONE uses Persistent Identifiers (PIDs) to refer to the SDO, SMO and ORE documents. The PIDs are sent to the DataONE server as an argument of the 'object' function and the DataONE server returns the correct response. Because of this, we must map those PIDs to the URLs that can be used to access the SDO and SMO from the DAP server. This mapping is provided by the database. The ORE document, as explained in the DAPD1Servlet documentation, is stored in the database; more on that in a bit.</p>
 
-<p><img src="database_tables.png" alt="The Database Tables"></p>
+<p><img src="/database_tables.png" alt="Database tables"></p>
+
+<p>Refer to the figure above. The database uses the SMO, SDO and ORE tables to store information about those kinds of objects - the PIDs that are used to access them and the URL, or the object/response itself for the ORE document, are stored in each of three tables. The Metadata table (creative name ;-) stores information about each PID. The Obsoletes table stores information about datasets that have been updated. Lastly, the Datasets table is used to track DAP URLs and the PIDs that are associated with it. This table is not used by the DAPD1Servlet but is used by the edit-db.sh command line tool to track when a URL has already been added to the database.</p>
+
+<h3>
+<a name="building-pids" class="anchor" href="#building-pids"><span class="octicon octicon-link"></span></a>Building PIDs</h3>
+
+<p>Since DAP datasets are bound to URLs and URLs are unique, it makes sense to use those as the basis of the PIDs used by the server. However, one URL will have several PIDs associated with it - one PID for each of the the SDO, SMO and ORE responses. Then, if the dataset is updated, even if the URL remains the same, there will be a new set of PIDs. The 'formula' for making a PID is to take the DAP URL and build the PID using the host name followed by a token made up of 'opendap', then one of 'sdo', 'smo' or 'ore' and an integer that corresponds to the dataset's DataONE serial number followed by the path part of the DAP URL. </p>
+
+<p>Here's an example PID for a SMO: <code>test.opendap.org/dataone_smo_1/opendap/hyrax/data/nc/fnoc1.nc</code>. 
+The matching DAP URL is: <code>http://test.opendap.org/opendap/hyrax/data/nc/fnoc1.nc.iso</code>.</p>
 
 <h2>
 <a name="optimizations-and-improvements" class="anchor" href="#optimizations-and-improvements"><span class="octicon octicon-link"></span></a>Optimizations and Improvements</h2>
 
-<p>Because the project also contains code that will be used by the servlet to read from the database, all of the accesses use the JDBC PreparedStatement object. PreparedStatements are precompiled by the underlying JDBC driver and then parameters, if there are any, are substituted as a separate post-compilation step. This prevents SQL injection attacks - an issue with any web interface that uses a database. One optimization would involve reorganizing these PreparedStatements and the objects that used them to minimize the number of times the database is asked to compile them, maximizing the number of times that same objects can be reused.</p>
+<p>Because the project also contains code that will be used by the servlet to read from the database, all of the accesses use the JDBC PreparedStatement object. PreparedStatements are precompiled by the underlying JDBC driver and then parameters, if there are any, are substituted as a separate post-compilation step. This prevents SQL injection attacks - an issue with any web interface that uses a database. One optimization would involve reorganizing these PreparedStatements and the objects that used them to minimize the number of times the database is asked to compile them and maximizing the number of times that same objects can be reused.</p>
 
-<p>The database tables are, I think, at least third normal form and so it is possible to use the SQL JOIN command efficiently to replace multiple queries with a single access to two or more JOINed tables.</p>
+<p>The database tables are, I think, at least in third normal form and so it is possible to use the SQL JOIN command efficiently to replace multiple queries with a single access to two or more JOINed tables.</p>
 
-<p>It would be much nicer to have a GUI of some sort (a web interface?) that would provide a more interactive want to look at the database contents and update the datasets. At the same time, if the SMO responses were stored in the database this UI could be used to edit/augment the information in those responses. This could improve the performance of the DataONE catalog search functions implemented by the Coordinating Nodes.</p>
+<p>It would be much nicer to have a GUI of some sort (a web interface?) that would provide a more interactive way to look at the database contents and update the datasets. At the same time, if the SMO responses were stored in the database this proposed UI could be used to edit/augment the information in those responses. This could improve the performance of the DataONE catalog search functions implemented by the Coordinating Nodes.</p>
       </section>
       <footer>
         <p>This project is maintained by <a href="https://github.com/OPENDAP">OPENDAP</a></p>
